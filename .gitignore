@@ -1,0 +1,42 @@
+# ── Python ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+wheels/
+*.egg-info/
+*.egg
+.venv/
+
+# ── Node / UI ────────────────────────────────
+ui/node_modules/
+ui/dist/
+ui/.vite/
+
+# ── Environment ──────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Data / Runtime ───────────────────────────
+data/*.db
+*.sqlite3
+*.log
+
+# ── Lock files (keep uv.lock, ignore npm lock) ──
+# uv.lock is tracked for reproducible Python builds
+# npm lock is generated on install
+ui/package-lock.json

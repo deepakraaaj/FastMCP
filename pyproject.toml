@@ -1,0 +1,39 @@
+[project]
+name = "tag-fastmcp"
+version = "0.1.0"
+description = "FastMCP-first runtime scaffold for a production-oriented TAG rebuild"
+readme = "README.md"
+authors = [
+    { name = "Deepakraj B", email = "deepakraj.b@kritilabs.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anyio>=4.12.1",
+    "fastmcp>=3.1.1",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "sqlglot>=29.0.1",
+    "sqlalchemy[asyncio]>=2.0.38",
+    "aiomysql>=0.2.0",
+    "aiosqlite>=0.21.0",
+    "openai>=1.61.0",
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+tag-fastmcp = "tag_fastmcp:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.9.27,<0.10.0"]
+build-backend = "uv_build"

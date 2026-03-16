@@ -1,0 +1,56 @@
+{
+  "name": "Create Task Workflow",
+  "description": "Collect required task fields through the workflow tools.",
+  "actor_id": "builder-demo",
+  "nodes": [
+    {
+      "id": "start-1",
+      "type": "start",
+      "label": "Start"
+    },
+    {
+      "id": "workflow-1",
+      "type": "start_workflow",
+      "label": "Start Create Task Workflow",
+      "config": {
+        "workflow_id": "create_task",
+        "values": {
+          "title": "Inspect motor bearings"
+        }
+      }
+    },
+    {
+      "id": "workflow-2",
+      "type": "continue_workflow",
+      "label": "Continue Workflow",
+      "config": {
+        "values": {
+          "facility_id": 1,
+          "priority": "high"
+        }
+      }
+    },
+    {
+      "id": "respond-1",
+      "type": "respond",
+      "label": "Respond",
+      "config": {
+        "message": "Workflow preview complete."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start-1",
+      "target": "workflow-1"
+    },
+    {
+      "source": "workflow-1",
+      "target": "workflow-2"
+    },
+    {
+      "source": "workflow-2",
+      "target": "respond-1"
+    }
+  ]
+}

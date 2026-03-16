@@ -1,0 +1,101 @@
+# Project Skills
+
+This file is not a framework-level skill registry. It is the project-local skill guide for future AI contributors.
+
+## Read First
+
+Before using any skill below, read:
+
+1. `docs/application-context.md`
+2. `docs/architecture.md`
+3. `docs/continuation-guide.md`
+
+## Available Project Skills
+
+### `fastmcp-runtime`
+
+Use when:
+
+- adding or changing MCP tools
+- adjusting transports
+- changing context/session usage
+- adding auth or middleware
+
+Focus areas:
+
+- keep tool handlers thin
+- prefer typed outputs
+- keep session behavior explicit
+
+### `sql-policy`
+
+Use when:
+
+- changing SQL validation rules
+- allowing mutations
+- adding table-level restrictions
+- changing summary or execution behavior
+
+Focus areas:
+
+- never weaken policy by accident
+- keep validation deterministic
+- add regression tests
+
+### `workflow-state`
+
+Use when:
+
+- adding guided flows
+- changing continuation behavior
+- storing workflow progress
+
+Focus areas:
+
+- keep workflow state explicit
+- preserve session continuity
+- do not bury workflow rules inside tool wrappers
+
+### `builder-bridge`
+
+Use when:
+
+- changing builder graph schemas
+- adding node types
+- changing preview execution
+- connecting a future visual builder UI
+
+Focus areas:
+
+- keep builder graphs constrained and debuggable
+- validate before previewing
+- route preview execution through real FastMCP tool calls
+
+### `domain-runtime`
+
+Use when:
+
+- changing manifest structure
+- adding reports
+- adding workflows
+- extending domain metadata
+
+Focus areas:
+
+- domain rules should remain config-driven where possible
+- document manifest changes
+- update examples and tests
+
+### `docs-sync`
+
+Use when:
+
+- adding features
+- changing architecture
+- changing contributor workflow
+
+Focus areas:
+
+- keep docs in sync with runtime reality
+- update handoff notes
+- note unfinished work clearly

@@ -1,0 +1,38 @@
+{
+  "name": "Overdue Tasks Report",
+  "description": "Minimal builder graph that previews a manifest-defined report through FastMCP.",
+  "actor_id": "builder-demo",
+  "nodes": [
+    {
+      "id": "start-1",
+      "type": "start",
+      "label": "Start"
+    },
+    {
+      "id": "report-1",
+      "type": "run_report",
+      "label": "Run Overdue Tasks Report",
+      "config": {
+        "report_name": "overdue_tasks"
+      }
+    },
+    {
+      "id": "respond-1",
+      "type": "respond",
+      "label": "Respond",
+      "config": {
+        "message": "Preview complete."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start-1",
+      "target": "report-1"
+    },
+    {
+      "source": "report-1",
+      "target": "respond-1"
+    }
+  ]
+}

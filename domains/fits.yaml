@@ -1,0 +1,37 @@
+name: fits
+description: "FITS Maintenance Application"
+allowed_tables:
+  - tasks
+  - facilities
+  - locations
+  - parts
+  - task_parts
+  - audit_logs
+protected_tables:
+  - schema_migrations
+reports:
+  complex_task_menu:
+    description: "Multi-table join to show available facilities, locations, and parts for task selection."
+    sql: >
+      SELECT 
+        f.name as facility,
+        l.section as location,
+        p.name as part_name,
+        p.stock_count,
+        f.id as facility_id,
+        l.id as location_id,
+        p.id as part_id
+      FROM facilities f
+      JOIN locations l ON l.facility_id = f.id
+      CROSS JOIN parts p
+      WHERE p.stock_count > 0
+workflows:
+  create_complex_task:
+    description: "Guided creation of a task with location and part assignment."
+    required_fields:
+      - title
+      - facility_id
+      - location_id
+      - part_id
+      - part_quantity
+      - priority

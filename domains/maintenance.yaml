@@ -1,0 +1,50 @@
+name: maintenance
+description: Maintenance domain with safe SQL access, canned reports, and guided workflow collection.
+allowed_tables:
+  - tasks
+  - facilities
+  - locations
+  - parts
+  - task_parts
+  - audit_logs
+protected_tables:
+  - schema_migrations
+reports:
+  overdue_tasks:
+    description: Show overdue maintenance tasks with facility info.
+    sql: >
+      SELECT t.id, t.title, t.status, f.name as facility
+      FROM tasks t
+      JOIN facilities f ON f.id = t.facility_id
+      WHERE t.status = 'overdue'
+  complex_task_menu:
+    description: "Multi-table join (6 tables) to show available facilities, locations, and parts for task selection."
+    sql: >
+      SELECT 
+        f.name as facility,
+        l.section as location,
+        p.name as part_name,
+        p.stock_count,
+        f.id as facility_id,
+        l.id as location_id,
+        p.id as part_id
+      FROM facilities f
+      JOIN locations l ON l.facility_id = f.id
+      CROSS JOIN parts p
+      WHERE p.stock_count > 0
+workflows:
+  create_task:
+    description: Simple task creation.
+    required_fields:
+      - title
+      - facility_id
+      - priority
+  create_complex_task:
+    description: "Guided creation of a task with location and part assignment."
+    required_fields:
+      - title
+      - facility_id
+      - location_id
+      - part_id
+      - part_quantity
+      - priority

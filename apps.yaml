@@ -1,0 +1,5 @@
+apps:
+  fits:
+    display_name: "FITS Maintenance"
+    database_url: "mysql+aiomysql://remote_192_168_15_49:12345@192.168.15.112:3306/fits_dev_march_9?allowPublicKeyRetrieval=true&useSSL=false"
+    manifest: "domains/fits.yaml"
