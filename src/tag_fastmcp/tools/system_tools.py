@@ -20,7 +20,7 @@ def register_system_tools(app: FastMCP, container: AppContainer) -> None:
 
     @app.tool
     async def start_session(ctx: Context, actor_id: str | None = None, trace_id: str | None = None) -> dict:
-        session = container.session_store.start_session(actor_id=actor_id)
+        session = await container.session_store.start_session(actor_id=actor_id)
         await _set_active_session(ctx, session.session_id)
         response = container.responses.system(
             message="Session started.",

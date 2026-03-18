@@ -1,6 +1,6 @@
 # TAG FastMCP
 
-A **domain-agnostic, multi-application** MCP runtime with a visual workflow builder.
+A **domain-agnostic, multi-application** MCP runtime and seed layer for a broader enterprise agent platform.
 
 > Built on [FastMCP](https://gofastmcp.com) · Self-hosted vLLM agent layer · React Flow visual canvas
 
@@ -32,7 +32,35 @@ A **domain-agnostic, multi-application** MCP runtime with a visual workflow buil
 - **No application-specific code in the core.** All domain logic lives in YAML manifests under `domains/` and app config in `apps.yaml`.
 - **Multi-app by design.** A single server handles multiple applications via `app_id` routing.
 - **Async everywhere.** The query engine uses `sqlalchemy[asyncio]` for non-blocking DB access.
+- **FastMCP is the execution surface, not the whole platform.** Keep MCP handlers thin and use them to expose safe typed capabilities to the broader orchestration layer.
+- **LangGraph is the long-term orchestration layer.** Clarification loops, agent state, routing, approvals, and multi-step planning should converge there rather than being buried inside MCP handlers.
+- **Valkey for ephemeral runtime state.** Cache, session state, idempotency keys, short-lived workflow state, rate limits, and lightweight pub/sub or streams belong in Valkey.
+- **PostgreSQL for durable control-plane data.** Registry metadata, tenants, audits, approvals, and durable workflow records should live in PostgreSQL rather than the ephemeral store.
 - **Self-hosted LLM.** The clarification agent calls your own vLLM endpoint — no external API keys needed.
+
+## Long-Term Platform Direction
+
+Recommended stack for the broader platform around this repository:
+
+- `LangGraph` for conversation and agent orchestration
+- `FastMCP` for MCP servers and tool adapters
+- `Langfuse` for AI traces, debugging, and evals
+- `OpenTelemetry + Grafana + Loki + Tempo + Prometheus` for platform observability
+- `React Flow` for the visual agent and MCP topology
+- `Valkey + PostgreSQL` for shared state, cache, sessions, registry, and durable records
+- `EKS` as the primary deployment target
+
+This repository should therefore be evolved as one layer of the system, not the entire system.
+
+## Build Domains
+
+When planning work, split the application into these five problem groups:
+
+- conversation and orchestration
+- MCP registry and routing
+- execution reliability
+- visual observability
+- application output formatting
 
 ---
 
@@ -46,7 +74,7 @@ uv sync
 
 # Configure your environment
 cp .env.example .env
-# Edit .env with your DATABASE_URL and LLM_BASE_URL
+# Edit `.env` with your apps config, database, LLM, and optional Valkey settings
 
 # Start the MCP server
 uv run tag-fastmcp
@@ -76,11 +104,18 @@ uv run pytest
 
 | Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | Async DB connection string | `sqlite+aiosqlite:///data/tag.db` |
-| `LLM_BASE_URL` | vLLM-compatible API endpoint | `http://192.168.15.112:8000/v1` |
-| `LLM_MODEL` | Model name for the agent | `auto` |
-| `HOST` | Server bind address | `127.0.0.1` |
-| `PORT` | Server bind port | `8001` |
+| `TAG_FASTMCP_DATABASE_URL` | Async runtime DB connection string | `sqlite+aiosqlite:///data/tag_fastmcp.sqlite3` |
+| `TAG_FASTMCP_APPS_CONFIG_PATH` | Path to the multi-app registry YAML | `apps.yaml` |
+| `TAG_FASTMCP_LLM_BASE_URL` | vLLM-compatible API endpoint | `http://192.168.15.112:8000/v1` |
+| `TAG_FASTMCP_LLM_MODEL` | Model name for the agent | `default` |
+| `TAG_FASTMCP_HOST` | Server bind address | `127.0.0.1` |
+| `TAG_FASTMCP_PORT` | Server bind port | `8001` |
+| `TAG_FASTMCP_SESSION_STORE_BACKEND` | `memory` or `valkey` for session storage | `memory` |
+| `TAG_FASTMCP_IDEMPOTENCY_STORE_BACKEND` | `memory` or `valkey` for replay storage | `memory` |
+| `TAG_FASTMCP_VALKEY_URL` | Valkey connection string for ephemeral state | `valkey://127.0.0.1:6379/0` |
+| `TAG_FASTMCP_VALKEY_KEY_PREFIX` | Shared key prefix for ephemeral state | `tag_fastmcp` |
+| `TAG_FASTMCP_SESSION_TTL_SECONDS` | Session TTL in Valkey, `0` disables expiry | `86400` |
+| `TAG_FASTMCP_IDEMPOTENCY_TTL_SECONDS` | Replay-cache TTL in Valkey, `0` disables expiry | `86400` |
 
 ---
 
@@ -96,8 +131,8 @@ uv run pytest
 │   │   ├── query_engine.py        # Async SQL executor
 │   │   ├── schema_discovery.py    # Auto-introspect any database
 │   │   ├── sql_policy.py          # SQL validation & mutation policy
-│   │   ├── session_store.py       # Session timeline
-│   │   ├── idempotency.py         # Replay-safe response store
+│   │   ├── session_store.py       # Session timeline + memory/Valkey backends
+│   │   ├── idempotency.py         # Replay-safe response store + memory/Valkey backends
 │   │   ├── response_builder.py    # Typed response envelopes
 │   │   ├── workflow_engine.py     # Guided workflow state
 │   │   └── domain_registry.py     # Manifest loading

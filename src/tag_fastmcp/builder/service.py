@@ -23,7 +23,8 @@ class BuilderRuntimeBridge:
     FastMCP tools through a real FastMCP client session.
     """
 
-    def __init__(self, *, domain_registry: DomainRegistry, sql_policy: SQLPolicyValidator):
+    def __init__(self, *, app_id: str, domain_registry: DomainRegistry, sql_policy: SQLPolicyValidator):
+        self.app_id = app_id
         self.domain_registry = domain_registry
         self.sql_policy = sql_policy
 
@@ -263,14 +264,14 @@ class BuilderRuntimeBridge:
             steps=steps,
         )
 
-    @staticmethod
-    def _tool_call(*, node: BuilderNode, session_id: str) -> tuple[str, dict[str, Any]]:
+    def _tool_call(self, *, node: BuilderNode, session_id: str) -> tuple[str, dict[str, Any]]:
         cfg = dict(node.config or {})
         if node.type == "execute_sql":
             return (
                 "execute_sql",
                 {
                     "request": {
+                        "app_id": self.app_id,
                         "session_id": session_id,
                         "sql": str(cfg.get("sql", "")),
                         "allow_mutations": bool(cfg.get("allow_mutations", False)),
@@ -283,6 +284,7 @@ class BuilderRuntimeBridge:
                 "run_report",
                 {
                     "request": {
+                        "app_id": self.app_id,
                         "session_id": session_id,
                         "report_name": str(cfg.get("report_name", "")),
                     }
@@ -293,6 +295,7 @@ class BuilderRuntimeBridge:
                 "start_workflow",
                 {
                     "request": {
+                        "app_id": self.app_id,
                         "session_id": session_id,
                         "workflow_id": str(cfg.get("workflow_id", "")),
                         "values": dict(cfg.get("values") or {}),
@@ -304,6 +307,7 @@ class BuilderRuntimeBridge:
                 "continue_workflow",
                 {
                     "request": {
+                        "app_id": self.app_id,
                         "session_id": session_id,
                         "values": dict(cfg.get("values") or {}),
                     }

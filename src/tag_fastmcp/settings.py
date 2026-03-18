@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,18 @@ class AppSettings(BaseSettings):
     allow_mutations: bool = False
     require_select_where: bool = True
     default_row_limit: int = Field(default=50, ge=1, le=500)
+    session_store_backend: Literal["memory", "valkey", "redis"] = "memory"
+    idempotency_store_backend: Literal["memory", "valkey", "redis"] = "memory"
+    valkey_url: str = Field(
+        default="valkey://127.0.0.1:6379/0",
+        validation_alias=AliasChoices("valkey_url", "redis_url"),
+    )
+    valkey_key_prefix: str = Field(
+        default="tag_fastmcp",
+        validation_alias=AliasChoices("valkey_key_prefix", "redis_key_prefix"),
+    )
+    session_ttl_seconds: int = Field(default=86_400, ge=0)
+    idempotency_ttl_seconds: int = Field(default=86_400, ge=0)
     database_url: str = "sqlite+aiosqlite:///data/tag_fastmcp.sqlite3"
     apps_config_path: Path = PROJECT_ROOT / "apps.yaml"
     llm_base_url: str = "http://192.168.15.112:8000/v1"

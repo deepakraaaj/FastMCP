@@ -9,9 +9,9 @@ from tag_fastmcp.builder.service import BuilderRuntimeBridge
 from tag_fastmcp.core.domain_registry import DomainRegistry
 from tag_fastmcp.core.query_engine import AsyncQueryEngine
 from tag_fastmcp.core.schema_discovery import SchemaDiscovery
+from tag_fastmcp.core.session_store import SessionStore
 from tag_fastmcp.core.sql_policy import SQLPolicyValidator
 from tag_fastmcp.core.workflow_engine import WorkflowEngine
-from tag_fastmcp.core.session_store import InMemorySessionStore
 from tag_fastmcp.models.app_config import AppsRegistry
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class AppRouter:
-    def __init__(self, settings: AppSettings, session_store: InMemorySessionStore):
+    def __init__(self, settings: AppSettings, session_store: SessionStore):
         self.settings = settings
         self.session_store = session_store
         self.registry = self._load_registry()
@@ -60,6 +60,7 @@ class AppRouter:
                 domain_registry=domain_registry
             )
             builder_runtime = BuilderRuntimeBridge(
+                app_id=app_id,
                 domain_registry=domain_registry,
                 sql_policy=sql_policy
             )

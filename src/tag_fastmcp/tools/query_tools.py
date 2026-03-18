@@ -16,7 +16,7 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
         app_ctx = container.app_router.resolve(request.app_id)
         session_id = await _resolved_session_id(request.session_id, ctx)
         
-        cached = container.idempotency.load(
+        cached = await container.idempotency.load(
             "execute_sql",
             session_id,
             request.idempotency_key,
@@ -29,7 +29,7 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
 
         if session_id is None:
             raise ValueError("session_id is required. Start a session first or pass session_id explicitly.")
-        container.session_store.ensure(session_id, actor_id=request.actor_id)
+        await container.session_store.ensure(session_id, actor_id=request.actor_id)
         await ctx.set_state("active_session_id", session_id)
 
         policy = app_ctx.sql_policy.validate(
@@ -46,7 +46,7 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
                 warnings=["SQL execution blocked by policy."],
                 meta={"idempotent_replay": False},
             ).model_dump(mode="json")
-            container.idempotency.save(
+            await container.idempotency.save(
                 "execute_sql",
                 session_id,
                 request.idempotency_key,
@@ -56,8 +56,8 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
             return blocked
 
         result = await app_ctx.query_engine.execute_sql(request.sql, policy)
-        container.session_store.set_last_query(session_id, result.query)
-        container.session_store.append_event(
+        await container.session_store.set_last_query(session_id, result.query)
+        await container.session_store.append_event(
             session_id,
             {
                 "type": "sql",
@@ -73,7 +73,7 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
             trace_id=request.trace_id,
             meta={"idempotent_replay": False},
         ).model_dump(mode="json")
-        container.idempotency.save(
+        await container.idempotency.save(
             "execute_sql",
             session_id,
             request.idempotency_key,
@@ -88,7 +88,7 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
         session_id = await _resolved_session_id(request.session_id, ctx)
         if session_id is None:
             raise ValueError("session_id is required. Start a session first or pass session_id explicitly.")
-        snapshot = container.session_store.get(session_id)
+        snapshot = await container.session_store.get(session_id)
         if not snapshot.last_query:
             return container.responses.sql(
                 status="error",

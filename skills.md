@@ -26,6 +26,27 @@ Focus areas:
 - keep tool handlers thin
 - prefer typed outputs
 - keep session behavior explicit
+- keep session/idempotency backend selection in the core container, not inside tool code
+- treat Valkey as the ephemeral runtime state layer and keep durable records out of it
+- do not move orchestration, approvals, or cross-service observability into FastMCP unless the architecture explicitly changes
+
+### `platform-boundaries`
+
+Use when:
+
+- deciding whether behavior belongs in LangGraph, FastMCP, the control plane, or the UI
+- splitting implementation work into services or phases
+- reviewing architecture drift
+
+Focus areas:
+
+- LangGraph owns orchestration and multi-step agent state
+- FastMCP owns typed MCP and tool exposure
+- Langfuse owns AI tracing and eval workflows
+- OTel plus Grafana, Loki, Tempo, and Prometheus own platform observability
+- React Flow owns visual topology and execution graph experiences
+- Valkey is for ephemeral shared state
+- PostgreSQL is for durable control-plane state
 
 ### `sql-policy`
 
@@ -54,6 +75,7 @@ Focus areas:
 
 - keep workflow state explicit
 - preserve session continuity
+- keep workflow persistence store-agnostic and async-safe
 - do not bury workflow rules inside tool wrappers
 
 ### `builder-bridge`
