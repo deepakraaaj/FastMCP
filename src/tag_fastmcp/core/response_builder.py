@@ -4,8 +4,10 @@ import uuid
 
 from tag_fastmcp.models.contracts import (
     DomainPayload,
+    RegistryPayload,
     ReportResultPayload,
     ResponseEnvelope,
+    RoutingPayload,
     SQLResultPayload,
     SessionPayload,
     WorkflowResultPayload,
@@ -19,6 +21,7 @@ class ResponseBuilder:
         message: str,
         session: SessionPayload | None = None,
         domain: DomainPayload | None = None,
+        registry: RegistryPayload | None = None,
         session_id: str | None = None,
         trace_id: str | None = None,
         meta: dict[str, object] | None = None,
@@ -32,6 +35,7 @@ class ResponseBuilder:
             trace_id=trace_id,
             session=session,
             domain=domain,
+            registry=registry,
             meta=dict(meta or {}),
         )
 
@@ -96,4 +100,27 @@ class ResponseBuilder:
             trace_id=trace_id,
             meta=dict(meta or {}),
             workflow=workflow,
+        )
+
+    @staticmethod
+    def routing(
+        *,
+        status: str,
+        message: str,
+        routing: RoutingPayload,
+        session_id: str | None = None,
+        trace_id: str | None = None,
+        warnings: list[str] | None = None,
+        meta: dict[str, object] | None = None,
+    ) -> ResponseEnvelope:
+        return ResponseEnvelope(
+            request_id=uuid.uuid4().hex,
+            route="ROUTING",
+            status=status,  # type: ignore[arg-type]
+            message=message,
+            session_id=session_id,
+            trace_id=trace_id,
+            warnings=list(warnings or []),
+            meta=dict(meta or {}),
+            routing=routing,
         )

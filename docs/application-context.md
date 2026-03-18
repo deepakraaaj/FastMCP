@@ -33,6 +33,7 @@ Convert natural-language or tool-driven business requests into trustworthy outco
 
 The internal core owns:
 
+- capability registry and discovery contracts
 - session state
 - idempotency
 - SQL policy enforcement
@@ -63,6 +64,24 @@ The larger platform around this repo should own:
 - health
 - session start
 - domain metadata
+
+### Registry path
+
+- app registry load
+- domain manifest load
+- external MCP server config load
+- channel formatter config load
+- capability snapshot derivation
+- typed registry response envelope
+
+### Routing path
+
+- capability registry lookup
+- capability selection by id or tags
+- built-in report/workflow execution or external MCP dispatch
+- timeout, retry, circuit-breaker, and fallback policy for external MCP execution
+- channel formatter attachment
+- typed routing response envelope
 
 ### SQL path
 
@@ -97,6 +116,7 @@ The larger platform around this repo should own:
 ## Current Strengths
 
 - explicit runtime ownership boundaries
+- typed capability registry for plug-and-play discovery
 - typed request and response contracts
 - deterministic SQL policy validation
 - constrained builder-to-runtime bridge

@@ -8,6 +8,7 @@ from tag_fastmcp.tools import (
     register_builder_tools,
     register_query_tools,
     register_report_tools,
+    register_routing_tools,
     register_schema_tools,
     register_agent_tools,
     register_system_tools,
@@ -30,6 +31,7 @@ def create_app(settings: AppSettings | None = None, container: AppContainer | No
     register_builder_tools(app, resolved_container)
     register_query_tools(app, resolved_container)
     register_report_tools(app, resolved_container)
+    register_routing_tools(app, resolved_container)
     register_schema_tools(app, resolved_container)
     register_agent_tools(app, resolved_container)
     register_workflow_tools(app, resolved_container)

@@ -20,6 +20,8 @@ Use when:
 - adjusting transports
 - changing context/session usage
 - adding auth or middleware
+- exposing new capability types through the runtime registry
+- exposing new registry-driven execution paths
 
 Focus areas:
 
@@ -29,6 +31,7 @@ Focus areas:
 - keep session/idempotency backend selection in the core container, not inside tool code
 - treat Valkey as the ephemeral runtime state layer and keep durable records out of it
 - do not move orchestration, approvals, or cross-service observability into FastMCP unless the architecture explicitly changes
+- make new tool behavior discoverable through the capability registry before orchestration depends on it
 
 ### `platform-boundaries`
 
@@ -47,6 +50,21 @@ Focus areas:
 - React Flow owns visual topology and execution graph experiences
 - Valkey is for ephemeral shared state
 - PostgreSQL is for durable control-plane state
+
+### `execution-reliability`
+
+Use when:
+
+- adding retry, timeout, fallback, or circuit-breaker behavior
+- changing external MCP dependency handling
+- reviewing degraded-mode execution
+
+Focus areas:
+
+- keep reliability policy in the internal core, not in MCP tool wrappers
+- use deterministic fallback targets where possible
+- preserve typed routing results and surface degraded execution clearly
+- do not weaken SQL or workflow contracts while adding failure handling
 
 ### `sql-policy`
 
@@ -101,10 +119,12 @@ Use when:
 - adding reports
 - adding workflows
 - extending domain metadata
+- extending config-only onboarding metadata for external MCP servers or channel formatters
 
 Focus areas:
 
 - domain rules should remain config-driven where possible
+- new reports and workflows should automatically appear through capability discovery
 - document manifest changes
 - update examples and tests
 

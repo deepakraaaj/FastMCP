@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from tag_fastmcp.core.app_router import AppRouter
+from tag_fastmcp.core.circuit_breaker import CircuitBreakerService
+from tag_fastmcp.core.capability_registry import CapabilityRegistry
+from tag_fastmcp.core.capability_router import CapabilityRouter
 from tag_fastmcp.core.idempotency import (
     IdempotencyService,
     InMemoryIdempotencyStore,
@@ -24,7 +27,11 @@ class AppContainer:
     session_store: SessionStore
     idempotency: IdempotencyService
     app_router: AppRouter
+    capability_registry: CapabilityRegistry
+    circuit_breakers: CircuitBreakerService
+    capability_router: CapabilityRouter
     responses: ResponseBuilder
+    mcp_target_overrides: dict[str, object] = field(default_factory=dict)
 
     async def close(self) -> None:
         await self.session_store.close()
@@ -65,12 +72,27 @@ def build_container(settings: AppSettings | None = None) -> AppContainer:
     session_store = _build_session_store(resolved_settings)
     idempotency = _build_idempotency(resolved_settings)
     app_router = AppRouter(settings=resolved_settings, session_store=session_store)
+    capability_registry = CapabilityRegistry(settings=resolved_settings, apps_registry=app_router.registry)
+    circuit_breakers = CircuitBreakerService()
+    mcp_target_overrides: dict[str, object] = {}
+    capability_router = CapabilityRouter(
+        app_router=app_router,
+        capability_registry=capability_registry,
+        apps_registry=app_router.registry,
+        session_store=session_store,
+        circuit_breakers=circuit_breakers,
+        target_resolver=lambda server_id, endpoint: mcp_target_overrides.get(server_id, endpoint),
+    )
 
     return AppContainer(
         settings=resolved_settings,
         session_store=session_store,
         idempotency=idempotency,
         app_router=app_router,
+        capability_registry=capability_registry,
+        circuit_breakers=circuit_breakers,
+        capability_router=capability_router,
+        mcp_target_overrides=mcp_target_overrides,
         responses=ResponseBuilder(),
     )
 

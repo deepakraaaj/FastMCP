@@ -73,6 +73,7 @@ FastMCP is good at:
 
 The internal core is where this project must stay explicit:
 
+- capability discovery contracts
 - policy
 - validation
 - state
@@ -150,6 +151,18 @@ Loads environment-backed runtime settings.
 
 Loads and validates the domain manifest. Provides report and workflow lookup.
 
+### `core/capability_registry.py`
+
+Derives the typed plug-and-play registry snapshot for MCP servers, agents, apps, reports, workflows, external MCP tool registrations, channel formatter contracts, and tool capabilities from runtime settings plus manifest config.
+
+### `core/capability_router.py`
+
+Consumes the registry snapshot to select capabilities by `capability_id` or tags and dispatch them through the correct adapter path, including timeout, retry, circuit-breaker, and fallback handling for external MCP tools.
+
+### `core/circuit_breaker.py`
+
+Tracks in-memory circuit-breaker state for registered external MCP servers so repeated failures do not keep hammering unhealthy dependencies.
+
 ### `core/sql_policy.py`
 
 Parses SQL with `sqlglot`, blocks forbidden commands, enforces table restrictions, and requires safe mutation filters.
@@ -182,7 +195,11 @@ Validates constrained builder graphs and previews them by calling FastMCP tools 
 
 ### `tools/system_tools.py`
 
-Session start, health, and domain inspection.
+Session start, health, domain inspection, and capability registry discovery.
+
+### `tools/routing_tools.py`
+
+Thin MCP entry point for registry-driven capability invocation.
 
 ### `tools/query_tools.py`
 
@@ -208,11 +225,17 @@ Near term:
 - use Valkey for ephemeral shared runtime state when multiple workers need session continuity or replay-safe caching
 - add auth provider integration
 - keep MCP tools thin
+- use the capability registry as the onboarding contract for new apps, reports, workflows, and future adapters
+- use `apps.yaml` as the config-only registration surface for external MCP server metadata and channel formatter contracts until the durable control plane lands
+- use `invoke_capability` as the first routing surface so new orchestration code consumes the registry instead of hardcoded tool names
+- keep reliability policy in the core router so retries, circuit breakers, and fallbacks remain deterministic and testable
 - keep FastMCP focused on typed tool execution, not platform orchestration
 - introduce LangGraph when clarification, routing, and approval logic becomes multi-step enough to justify a dedicated orchestrator
 
 Long term:
 
+- extend the capability registry to include external MCP servers, channels, approval gates, and formatter plugins from durable PostgreSQL-backed metadata
+- move circuit-breaker and dependency health state to shared infrastructure when multiple workers need coordinated behavior
 - move registry, tenant, audit, approval, and durable workflow records into PostgreSQL as the control-plane source of truth
 - add Langfuse for AI-native trace and eval workflows
 - add the OTel plus Grafana, Loki, Tempo, and Prometheus stack for platform-level observability

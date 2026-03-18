@@ -22,6 +22,10 @@ Use these long-term ownership boundaries:
 ## What Is Already Built
 
 - FastMCP app factory and server entrypoint
+- typed capability registry and `describe_capabilities` discovery tool
+- config-only external MCP server registration and channel formatter contracts through `apps.yaml`
+- registry-driven execution through `invoke_capability`
+- timeout, retry, circuit-breaker, and fallback handling for registered external MCP tools
 - typed request/response models
 - session store with memory and Valkey backends
 - idempotency store with memory and Valkey backends
@@ -37,6 +41,7 @@ Use these long-term ownership boundaries:
 
 ### Priority 1
 
+- promote the capability registry from manifest-derived discovery into the formal onboarding contract for adapters and routing
 - formalize the conversation and orchestration layer so clarification and routing can move into LangGraph cleanly
 - design the MCP registry and routing control plane around PostgreSQL-backed durable records
 - auth provider integration
@@ -46,7 +51,10 @@ Use these long-term ownership boundaries:
 ### Priority 2
 
 - multi-domain registry
-- execution reliability primitives such as retries, circuit breakers, and fallback routing
+- config-only onboarding for external MCP server registrations
+- channel formatter contracts so new applications can plug in without orchestration rewrites
+- extend registry-driven routing beyond reports, workflows, and simple external tool dispatch
+- shared reliability state if multiple workers need coordinated circuit-breaker behavior
 - report parameter binding
 - stronger workflow actions
 

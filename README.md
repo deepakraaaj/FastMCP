@@ -34,6 +34,7 @@ A **domain-agnostic, multi-application** MCP runtime and seed layer for a broade
 - **Async everywhere.** The query engine uses `sqlalchemy[asyncio]` for non-blocking DB access.
 - **FastMCP is the execution surface, not the whole platform.** Keep MCP handlers thin and use them to expose safe typed capabilities to the broader orchestration layer.
 - **LangGraph is the long-term orchestration layer.** Clarification loops, agent state, routing, approvals, and multi-step planning should converge there rather than being buried inside MCP handlers.
+- **Capability discovery is the plug-and-play contract.** New apps, reports, workflows, and tools should become discoverable through a typed registry before orchestration logic depends on them.
 - **Valkey for ephemeral runtime state.** Cache, session state, idempotency keys, short-lived workflow state, rate limits, and lightweight pub/sub or streams belong in Valkey.
 - **PostgreSQL for durable control-plane data.** Registry metadata, tenants, audits, approvals, and durable workflow records should live in PostgreSQL rather than the ephemeral store.
 - **Self-hosted LLM.** The clarification agent calls your own vLLM endpoint — no external API keys needed.
@@ -61,6 +62,45 @@ When planning work, split the application into these five problem groups:
 - execution reliability
 - visual observability
 - application output formatting
+
+## Plug-And-Play Baseline
+
+The current runtime now exposes a typed capability registry through `describe_capabilities`.
+
+That registry is the starting contract for:
+
+- MCP server discovery
+- agent discovery
+- app-level report and workflow discovery
+- future routing decisions
+- config-only onboarding paths
+
+The current onboarding baseline is:
+
+1. register an app in `apps.yaml`
+2. define reports and workflows in its manifest
+3. let the core capability registry derive the discoverable contract
+4. keep MCP tools thin and let orchestration consume registry metadata rather than hardcoded branches
+
+The next plug-and-play baseline now also supports:
+
+- config-only external MCP server registration in `apps.yaml`
+- config-only channel formatter contracts in `apps.yaml`
+- registry discovery of external tools and formatter capabilities through `describe_capabilities`
+- registry-driven execution through `invoke_capability`
+
+`invoke_capability` is the first registry-consuming execution path. It can:
+
+- select a report or workflow by tags instead of hardcoded tool branching
+- dispatch a registered external MCP tool by capability id
+- attach channel formatter metadata to the routing result
+
+The current reliability baseline for registered external MCP tools includes:
+
+- per-tool timeout budgets
+- bounded retries with backoff
+- server-level circuit breaker state
+- exact fallback capability ids for deterministic degradation
 
 ---
 
@@ -127,6 +167,9 @@ uv run pytest
 │   ├── settings.py                # Environment-backed settings
 │   ├── core/
 │   │   ├── app_router.py          # Multi-app context resolver
+│   │   ├── capability_router.py   # Registry-driven execution and dispatch
+│   │   ├── capability_registry.py # Plug-and-play capability discovery
+│   │   ├── circuit_breaker.py     # External MCP dependency breaker state
 │   │   ├── container.py           # Dependency graph
 │   │   ├── query_engine.py        # Async SQL executor
 │   │   ├── schema_discovery.py    # Auto-introspect any database
@@ -146,6 +189,7 @@ uv run pytest
 │   │   └── builder.py             # Builder graph models
 │   └── tools/
 │       ├── query_tools.py         # execute_sql, summarize
+│       ├── routing_tools.py       # invoke_capability
 │       ├── schema_tools.py        # discover_schema
 │       ├── agent_tools.py         # agent_chat
 │       ├── report_tools.py        # run_report
@@ -183,7 +227,38 @@ uv run pytest
 
 2. Create a domain manifest at `domains/my_app.yaml` with your reports and workflows.
 
-3. All MCP tool calls now accept `app_id: "my_app"` to route to the correct context.
+3. Optionally register external MCP servers and channel formatter contracts:
+   ```yaml
+   mcp_servers:
+     github:
+       display_name: "GitHub MCP"
+       description: "External GitHub integration server."
+       transport: "streamable-http"
+       endpoint: "http://github-mcp.local/mcp"
+       auth_mode: "bearer"
+       app_ids: ["my_app"]
+       tools:
+         search_issues:
+           display_name: "Search Issues"
+           description: "Search repository issues."
+           input_schema: "GitHubIssueSearchRequest"
+           output_schema: "GitHubIssueSearchResponse"
+
+   channels:
+     web_chat:
+       display_name: "Web Chat"
+       description: "Browser chat surface."
+       app_ids: ["my_app"]
+       formatter:
+         formatter_id: "web_chat.default"
+         request_contract: "ChannelRequest[web_chat]"
+         response_contract: "ChannelResponse[text|card|dashboard]"
+         output_modes: ["text", "card", "dashboard"]
+         supports_streaming: true
+         supports_actions: true
+   ```
+
+4. All MCP tool calls now accept `app_id: "my_app"` to route to the correct context, and `describe_capabilities` will expose the new app, external server tools, and formatter contracts.
 
 ---
 

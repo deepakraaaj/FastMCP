@@ -46,3 +46,19 @@ def register_system_tools(app: FastMCP, container: AppContainer) -> None:
             ),
         )
         return response.model_dump(mode="json")
+
+    @app.tool
+    async def describe_capabilities(app_id: str | None = None, trace_id: str | None = None) -> dict:
+        registry = container.capability_registry.describe(app_id=app_id)
+        response = container.responses.system(
+            message="Capability registry loaded.",
+            trace_id=trace_id,
+            registry=registry,
+            meta={
+                "app_count": len(registry.apps),
+                "capability_count": len(registry.capabilities),
+                "agent_count": len(registry.agents),
+                "mcp_server_count": len(registry.mcp_servers),
+            },
+        )
+        return response.model_dump(mode="json")
