@@ -18,6 +18,7 @@ from tag_fastmcp.models.contracts import (
 )
 
 if TYPE_CHECKING:
+    from tag_fastmcp.core.agent_registry import AgentRegistry
     from tag_fastmcp.settings import AppSettings
 
 
@@ -150,6 +151,69 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
         fallback_hint="Use describe_capabilities first when capability selection is ambiguous.",
     ),
     _ToolCapabilitySpec(
+        tool_name="list_approval_queue",
+        display_name="List Approval Queue",
+        description="List approval requests visible to the current trusted admin scope.",
+        tags=("approval", "queue", "admin"),
+        input_schema="ApprovalQueueRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="decide_approval",
+        display_name="Decide Approval",
+        description="Approve, reject, cancel, or expire a lifecycle approval from trusted admin scope.",
+        tags=("approval", "decision", "admin"),
+        input_schema="ApprovalDecisionRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="resume_approved_execution",
+        display_name="Resume Approved Execution",
+        description="Resume a paused execution after approval using the recorded bounded plan.",
+        tags=("approval", "resume", "admin"),
+        input_schema="ResumeExecutionRequest",
+        output_schema="ResponseEnvelope[routing]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="list_agent_proposals",
+        display_name="List Agent Proposals",
+        description="List visible agent proposal drafts from the durable control plane.",
+        tags=("agent", "proposal", "admin"),
+        input_schema="ProposalListRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="list_agent_registrations",
+        display_name="List Agent Registrations",
+        description="List visible agent registration and activation records.",
+        tags=("agent", "registration", "admin"),
+        input_schema="RegistrationListRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="register_agent_proposal",
+        display_name="Register Agent Proposal",
+        description="Register an approved proposal into controlled agent metadata without activating it.",
+        tags=("agent", "registration", "admin"),
+        input_schema="RegisterProposalRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="activate_agent_registration",
+        display_name="Activate Agent Registration",
+        description="Activate a registered agent so it becomes visible in the capability registry.",
+        tags=("agent", "activation", "admin"),
+        input_schema="ActivateRegistrationRequest",
+        output_schema="ResponseEnvelope[lifecycle]",
+        validation_owner="core",
+    ),
+    _ToolCapabilitySpec(
         tool_name="validate_builder_graph",
         display_name="Validate Builder Graph",
         description="Validate a constrained builder graph before preview execution.",
@@ -171,9 +235,15 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
 
 
 class CapabilityRegistry:
-    def __init__(self, settings: AppSettings, apps_registry: AppsRegistry):
+    def __init__(
+        self,
+        settings: AppSettings,
+        apps_registry: AppsRegistry,
+        agent_registry: AgentRegistry,
+    ):
         self.settings = settings
         self.apps_registry = apps_registry
+        self.agent_registry = agent_registry
 
     def describe(self, app_id: str | None = None) -> RegistryPayload:
         selected_apps = self._selected_apps(app_id)
@@ -226,16 +296,7 @@ class CapabilityRegistry:
                 )
             ]
             + external_servers,
-            agents=[
-                RegistryAgentPayload(
-                    agent_id="agent.clarification",
-                    display_name="Clarification Agent",
-                    description="vLLM-backed clarification agent exposed through the MCP surface.",
-                    provider="vllm-compatible",
-                    model_name=self.settings.llm_model,
-                    capability_ids=["tool.agent_chat"],
-                )
-            ],
+            agents=self.agent_registry.catalog(),
             channels=channels,
             apps=sorted(apps, key=lambda item: item.app_id),
             capabilities=capabilities,

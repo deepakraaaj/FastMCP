@@ -19,6 +19,7 @@ ui/.vite/
 .env
 .env.local
 .env.*.local
+apps.local.yaml
 
 # ── IDE ──────────────────────────────────────
 .vscode/

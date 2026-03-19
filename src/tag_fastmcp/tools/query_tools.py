@@ -4,6 +4,7 @@ from fastmcp import Context, FastMCP
 
 from tag_fastmcp.core.container import AppContainer
 from tag_fastmcp.models.contracts import ExecuteSQLRequest, SummaryRequest
+from tag_fastmcp.tools._enforcement import apply_tool_enforcement
 
 
 async def _resolved_session_id(request_session_id: str | None, ctx: Context) -> str | None:
@@ -13,9 +14,8 @@ async def _resolved_session_id(request_session_id: str | None, ctx: Context) -> 
 def register_query_tools(app: FastMCP, container: AppContainer) -> None:
     @app.tool
     async def execute_sql(request: ExecuteSQLRequest, ctx: Context) -> dict:
-        app_ctx = container.app_router.resolve(request.app_id)
         session_id = await _resolved_session_id(request.session_id, ctx)
-        
+
         cached = await container.idempotency.load(
             "execute_sql",
             session_id,
@@ -27,11 +27,17 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
             cached["meta"]["idempotent_replay"] = True
             return cached
 
+        request_context, policy_envelope = await apply_tool_enforcement(
+            container,
+            request,
+            session_id=session_id,
+            allow_platform_tools=True,
+        )
         if session_id is None:
             raise ValueError("session_id is required. Start a session first or pass session_id explicitly.")
-        await container.session_store.ensure(session_id, actor_id=request.actor_id)
         await ctx.set_state("active_session_id", session_id)
 
+        app_ctx = container.app_router.resolve(policy_envelope.primary_app_id or request.app_id)
         policy = app_ctx.sql_policy.validate(
             request.sql,
             allow_mutations_override=request.allow_mutations,
@@ -44,7 +50,11 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
                 session_id=session_id,
                 trace_id=request.trace_id,
                 warnings=["SQL execution blocked by policy."],
-                meta={"idempotent_replay": False},
+                meta={
+                    "idempotent_replay": False,
+                    "request_context_id": request_context.request_id,
+                    "policy_envelope_id": policy_envelope.envelope_id,
+                },
             ).model_dump(mode="json")
             await container.idempotency.save(
                 "execute_sql",
@@ -71,7 +81,11 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
             sql=result,
             session_id=session_id,
             trace_id=request.trace_id,
-            meta={"idempotent_replay": False},
+            meta={
+                "idempotent_replay": False,
+                "request_context_id": request_context.request_id,
+                "policy_envelope_id": policy_envelope.envelope_id,
+            },
         ).model_dump(mode="json")
         await container.idempotency.save(
             "execute_sql",
@@ -84,10 +98,16 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
 
     @app.tool
     async def summarize_last_query(request: SummaryRequest, ctx: Context) -> dict:
-        app_ctx = container.app_router.resolve(request.app_id)
         session_id = await _resolved_session_id(request.session_id, ctx)
+        request_context, policy_envelope = await apply_tool_enforcement(
+            container,
+            request,
+            session_id=session_id,
+            allow_platform_tools=True,
+        )
         if session_id is None:
             raise ValueError("session_id is required. Start a session first or pass session_id explicitly.")
+        app_ctx = container.app_router.resolve(policy_envelope.primary_app_id or request.app_id)
         snapshot = await container.session_store.get(session_id)
         if not snapshot.last_query:
             return container.responses.sql(
@@ -97,6 +117,10 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
                 session_id=session_id,
                 trace_id=request.trace_id,
                 warnings=["Run execute_sql first."],
+                meta={
+                    "request_context_id": request_context.request_id,
+                    "policy_envelope_id": policy_envelope.envelope_id,
+                },
             ).model_dump(mode="json")
 
         policy = app_ctx.sql_policy.validate(snapshot.last_query, allow_mutations_override=False)
@@ -108,4 +132,8 @@ def register_query_tools(app: FastMCP, container: AppContainer) -> None:
             sql=result,
             session_id=session_id,
             trace_id=request.trace_id,
+            meta={
+                "request_context_id": request_context.request_id,
+                "policy_envelope_id": policy_envelope.envelope_id,
+            },
         ).model_dump(mode="json")

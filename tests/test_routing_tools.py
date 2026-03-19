@@ -23,11 +23,23 @@ async def test_invoke_capability_routes_report_by_tags(routed_test_app) -> None:
     payload = result.structured_content
     assert payload["route"] == "ROUTING"
     assert payload["status"] == "ok"
+    assert payload["meta"]["request_context_id"]
+    assert payload["meta"]["policy_envelope_id"]
+    assert payload["meta"]["routing_plan_id"]
+    assert payload["meta"]["orchestration_decision_id"]
+    assert payload["meta"]["orchestration_mode"] == "single_step"
+    assert payload["meta"]["response_state"] == "ok"
+    assert payload["meta"]["primary_mode"] == "card"
     assert payload["routing"]["selected_capability_id"] == "report.maintenance.overdue_tasks"
+    assert payload["routing"]["request_context_id"] == payload["meta"]["request_context_id"]
+    assert payload["routing"]["policy_envelope_id"] == payload["meta"]["policy_envelope_id"]
+    assert payload["routing"]["routing_plan_id"] == payload["meta"]["routing_plan_id"]
     assert payload["routing"]["selection_mode"] == "tags"
     assert payload["routing"]["formatter_id"] == "web_chat.default"
     assert payload["routing"]["downstream_route"] == "REPORT"
     assert payload["routing"]["output"]["report"]["report_name"] == "overdue_tasks"
+    assert payload["presentation"]["primary_mode"] == "card"
+    assert payload["presentation"]["state"]["status"] == "ok"
 
 
 async def test_invoke_capability_dispatches_registered_external_mcp_tool(routed_test_app) -> None:

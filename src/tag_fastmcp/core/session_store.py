@@ -31,6 +31,9 @@ class WorkflowState:
 class SessionSnapshot:
     session_id: str
     actor_id: str | None = None
+    tenant_id: str | None = None
+    bound_app_id: str | None = None
+    execution_mode: str | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     last_query: str | None = None
     active_workflow: WorkflowState | None = None
@@ -39,6 +42,9 @@ class SessionSnapshot:
         return {
             "session_id": self.session_id,
             "actor_id": self.actor_id,
+            "tenant_id": self.tenant_id,
+            "bound_app_id": self.bound_app_id,
+            "execution_mode": self.execution_mode,
             "history": list(self.history),
             "last_query": self.last_query,
             "active_workflow": self.active_workflow.to_dict() if self.active_workflow else None,
@@ -50,6 +56,9 @@ class SessionSnapshot:
         return cls(
             session_id=payload["session_id"],
             actor_id=payload.get("actor_id"),
+            tenant_id=payload.get("tenant_id"),
+            bound_app_id=payload.get("bound_app_id"),
+            execution_mode=payload.get("execution_mode"),
             history=list(payload.get("history") or []),
             last_query=payload.get("last_query"),
             active_workflow=WorkflowState.from_dict(workflow_payload) if workflow_payload else None,
@@ -68,6 +77,15 @@ class SessionStore(Protocol):
     async def set_last_query(self, session_id: str, sql: str) -> None: ...
 
     async def set_workflow(self, session_id: str, workflow: WorkflowState | None) -> None: ...
+
+    async def bind_scope(
+        self,
+        session_id: str,
+        *,
+        app_id: str | None = None,
+        tenant_id: str | None = None,
+        execution_mode: str | None = None,
+    ) -> SessionSnapshot: ...
 
     async def close(self) -> None: ...
 
@@ -108,6 +126,23 @@ class InMemorySessionStore:
     async def set_workflow(self, session_id: str, workflow: WorkflowState | None) -> None:
         snapshot = await self.get(session_id)
         snapshot.active_workflow = workflow
+
+    async def bind_scope(
+        self,
+        session_id: str,
+        *,
+        app_id: str | None = None,
+        tenant_id: str | None = None,
+        execution_mode: str | None = None,
+    ) -> SessionSnapshot:
+        snapshot = await self.get(session_id)
+        if app_id is not None:
+            snapshot.bound_app_id = app_id
+        if tenant_id is not None:
+            snapshot.tenant_id = tenant_id
+        if execution_mode is not None:
+            snapshot.execution_mode = execution_mode
+        return snapshot
 
     async def close(self) -> None:
         return None
@@ -185,6 +220,24 @@ class ValkeySessionStore:
         snapshot = await self.get(session_id)
         snapshot.active_workflow = workflow
         await self._persist(snapshot)
+
+    async def bind_scope(
+        self,
+        session_id: str,
+        *,
+        app_id: str | None = None,
+        tenant_id: str | None = None,
+        execution_mode: str | None = None,
+    ) -> SessionSnapshot:
+        snapshot = await self.get(session_id)
+        if app_id is not None:
+            snapshot.bound_app_id = app_id
+        if tenant_id is not None:
+            snapshot.tenant_id = tenant_id
+        if execution_mode is not None:
+            snapshot.execution_mode = execution_mode
+        await self._persist(snapshot)
+        return snapshot
 
     async def close(self) -> None:
         await self._client.aclose()

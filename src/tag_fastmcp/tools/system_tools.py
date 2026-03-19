@@ -49,6 +49,7 @@ def register_system_tools(app: FastMCP, container: AppContainer) -> None:
 
     @app.tool
     async def describe_capabilities(app_id: str | None = None, trace_id: str | None = None) -> dict:
+        await container.agent_registry.refresh_dynamic_agents()
         registry = container.capability_registry.describe(app_id=app_id)
         response = container.responses.system(
             message="Capability registry loaded.",

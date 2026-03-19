@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 
 from tag_fastmcp.models.contracts import (
+    ChannelResponse,
     DomainPayload,
+    LifecyclePayload,
     RegistryPayload,
     ReportResultPayload,
     ResponseEnvelope,
@@ -22,6 +24,7 @@ class ResponseBuilder:
         session: SessionPayload | None = None,
         domain: DomainPayload | None = None,
         registry: RegistryPayload | None = None,
+        lifecycle: LifecyclePayload | None = None,
         session_id: str | None = None,
         trace_id: str | None = None,
         meta: dict[str, object] | None = None,
@@ -36,6 +39,7 @@ class ResponseBuilder:
             session=session,
             domain=domain,
             registry=registry,
+            lifecycle=lifecycle,
             meta=dict(meta or {}),
         )
 
@@ -112,6 +116,8 @@ class ResponseBuilder:
         trace_id: str | None = None,
         warnings: list[str] | None = None,
         meta: dict[str, object] | None = None,
+        presentation: ChannelResponse | None = None,
+        lifecycle: LifecyclePayload | None = None,
     ) -> ResponseEnvelope:
         return ResponseEnvelope(
             request_id=uuid.uuid4().hex,
@@ -123,4 +129,6 @@ class ResponseBuilder:
             warnings=list(warnings or []),
             meta=dict(meta or {}),
             routing=routing,
+            presentation=presentation,
+            lifecycle=lifecycle,
         )

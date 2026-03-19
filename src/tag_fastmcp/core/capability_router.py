@@ -11,6 +11,9 @@ from tag_fastmcp.models.app_config import AppsRegistry
 from tag_fastmcp.models.contracts import (
     CapabilityPayload,
     InvokeCapabilityRequest,
+    PolicyEnvelope,
+    RequestContext,
+    RoutingPlan,
     RoutingPayload,
 )
 
@@ -25,6 +28,7 @@ class _SelectionResult:
     capability: CapabilityPayload
     selection_mode: str
     selection_reason: str
+    candidate_capability_ids: list[str]
 
 
 class CapabilityRouter:
@@ -45,8 +49,56 @@ class CapabilityRouter:
         self.circuit_breakers = circuit_breakers
         self.target_resolver = target_resolver
 
-    async def invoke(self, request: InvokeCapabilityRequest, session_id: str | None) -> RoutingPayload:
-        return await self._invoke(request, session_id=session_id, attempted_fallbacks=set())
+    async def invoke(
+        self,
+        request: InvokeCapabilityRequest,
+        session_id: str | None,
+        *,
+        request_context: RequestContext | None = None,
+        policy_envelope: PolicyEnvelope | None = None,
+        routing_plan: RoutingPlan | None = None,
+    ) -> RoutingPayload:
+        return await self._invoke(
+            request,
+            session_id=session_id,
+            attempted_fallbacks=set(),
+            request_context=request_context,
+            policy_envelope=policy_envelope,
+            routing_plan=routing_plan,
+        )
+
+    def build_routing_plan(
+        self,
+        request: InvokeCapabilityRequest,
+        *,
+        request_context: RequestContext,
+        policy_envelope: PolicyEnvelope,
+    ) -> RoutingPlan:
+        registry = self.capability_registry.describe(app_id=policy_envelope.primary_app_id or request.app_id)
+        selection = self._select(registry.capabilities, request, policy_envelope=policy_envelope)
+        formatter_id = self._formatter_id(registry.channels, request.channel_id, policy_envelope=policy_envelope)
+
+        intent_type = "invoke_external_tool"
+        if selection.capability.kind == "report":
+            intent_type = "run_report"
+        elif selection.capability.kind == "workflow":
+            intent_type = "run_workflow"
+
+        approval_reason = policy_envelope.require_approval_for[0] if policy_envelope.require_approval_for else None
+
+        return RoutingPlan(
+            plan_id=f"route_{request_context.request_id}",
+            request_id=request_context.request_id,
+            intent_type=intent_type,  # type: ignore[arg-type]
+            target_app_ids=list(policy_envelope.allowed_app_ids),
+            selected_capability_id=selection.capability.capability_id,
+            candidate_capability_ids=list(selection.candidate_capability_ids),
+            requires_approval=approval_reason is not None,
+            approval_reason=approval_reason,
+            formatter_id=formatter_id,
+            audit_tags=["routing", request_context.execution_mode, selection.capability.kind, request.app_id],
+            reasoning_summary=selection.selection_reason,
+        )
 
     async def _invoke(
         self,
@@ -54,10 +106,17 @@ class CapabilityRouter:
         *,
         session_id: str | None,
         attempted_fallbacks: set[str],
+        request_context: RequestContext | None,
+        policy_envelope: PolicyEnvelope | None,
+        routing_plan: RoutingPlan | None,
     ) -> RoutingPayload:
-        registry = self.capability_registry.describe(app_id=request.app_id)
-        selection = self._select(registry.capabilities, request)
-        formatter_id = self._formatter_id(registry.channels, request.channel_id)
+        registry = self.capability_registry.describe(app_id=policy_envelope.primary_app_id if policy_envelope else request.app_id)
+        selection = self._select(registry.capabilities, request, policy_envelope=policy_envelope)
+        formatter_id = routing_plan.formatter_id if routing_plan else self._formatter_id(
+            registry.channels,
+            request.channel_id,
+            policy_envelope=policy_envelope,
+        )
 
         if selection.capability.execution.requires_session and session_id is None:
             raise ValueError("session_id is required for the selected capability.")
@@ -67,6 +126,9 @@ class CapabilityRouter:
                 raise ValueError("session_id is required for report execution.")
             output = await self._run_report(selection.capability, request, session_id)
             return RoutingPayload(
+                request_context_id=request_context.request_id if request_context else None,
+                policy_envelope_id=policy_envelope.envelope_id if policy_envelope else None,
+                routing_plan_id=routing_plan.plan_id if routing_plan else None,
                 selected_capability_id=selection.capability.capability_id,
                 capability_kind=selection.capability.kind,
                 selection_mode=selection.selection_mode,  # type: ignore[arg-type]
@@ -84,6 +146,9 @@ class CapabilityRouter:
                 raise ValueError("session_id is required for workflow execution.")
             output = await self._run_workflow(selection.capability, request, session_id)
             return RoutingPayload(
+                request_context_id=request_context.request_id if request_context else None,
+                policy_envelope_id=policy_envelope.envelope_id if policy_envelope else None,
+                routing_plan_id=routing_plan.plan_id if routing_plan else None,
                 selected_capability_id=selection.capability.capability_id,
                 capability_kind=selection.capability.kind,
                 selection_mode=selection.selection_mode,  # type: ignore[arg-type]
@@ -113,15 +178,22 @@ class CapabilityRouter:
                     fallback_request,
                     session_id=session_id,
                     attempted_fallbacks={*attempted_fallbacks, selection.capability.capability_id},
+                    request_context=request_context,
+                    policy_envelope=policy_envelope,
+                    routing_plan=None,
                 )
                 fallback_result.fallback_used = True
                 fallback_result.fallback_capability_id = fallback_capability_id
                 fallback_result.circuit_breaker_state = circuit_state
                 fallback_result.attempts += attempts
                 fallback_result.warnings = [*warnings, *fallback_result.warnings]
+                fallback_result.routing_plan_id = routing_plan.plan_id if routing_plan else fallback_result.routing_plan_id
                 return fallback_result
 
         return RoutingPayload(
+            request_context_id=request_context.request_id if request_context else None,
+            policy_envelope_id=policy_envelope.envelope_id if policy_envelope else None,
+            routing_plan_id=routing_plan.plan_id if routing_plan else None,
             selected_capability_id=selection.capability.capability_id,
             capability_kind=selection.capability.kind,
             selection_mode=selection.selection_mode,  # type: ignore[arg-type]
@@ -140,18 +212,27 @@ class CapabilityRouter:
         )
 
     @staticmethod
-    def _select(candidates: list[CapabilityPayload], request: InvokeCapabilityRequest) -> _SelectionResult:
-        executable = [cap for cap in candidates if cap.kind in {"tool", "report", "workflow"}]
+    def _select(
+        candidates: list[CapabilityPayload],
+        request: InvokeCapabilityRequest,
+        *,
+        policy_envelope: PolicyEnvelope | None,
+    ) -> _SelectionResult:
+        executable = [
+            capability
+            for capability in candidates
+            if CapabilityRouter._is_routable_capability(capability)
+            and (policy_envelope is None or capability.capability_id in policy_envelope.allowed_capability_ids)
+        ]
 
         if request.capability_id:
             for capability in executable:
                 if capability.capability_id == request.capability_id:
-                    if capability.scope == "platform" and capability.kind == "tool" and not request.allow_platform_tools:
-                        raise ValueError("Platform tool execution requires allow_platform_tools=true.")
                     return _SelectionResult(
                         capability=capability,
                         selection_mode="capability_id",
                         selection_reason=f"Selected exact capability_id '{request.capability_id}'.",
+                        candidate_capability_ids=[capability.capability_id],
                     )
             raise ValueError(f"Unknown capability_id '{request.capability_id}'.")
 
@@ -175,6 +256,7 @@ class CapabilityRouter:
             raise ValueError("No capability matched the requested kind and tags.")
 
         filtered.sort(key=lambda item: (-item[0], item[1].capability_id))
+        candidate_ids = [capability.capability_id for _, capability in filtered]
         top_score = filtered[0][0]
         top_matches = [capability for score, capability in filtered if score == top_score]
         if len(top_matches) > 1:
@@ -186,14 +268,32 @@ class CapabilityRouter:
             capability=chosen,
             selection_mode="tags",
             selection_reason=f"Selected {chosen.capability_id} by kind '{request.kind}' and tags {sorted(requested_tags)}.",
+            candidate_capability_ids=candidate_ids,
         )
 
     @staticmethod
-    def _formatter_id(channels: list[Any], channel_id: str | None) -> str | None:
+    def _is_routable_capability(capability: CapabilityPayload) -> bool:
+        if capability.kind in {"report", "workflow"}:
+            return True
+        return capability.kind == "tool" and capability.owner.startswith("mcp_server:")
+
+    @staticmethod
+    def _formatter_id(
+        channels: list[Any],
+        channel_id: str | None,
+        *,
+        policy_envelope: PolicyEnvelope | None,
+    ) -> str | None:
         if channel_id is None:
             return None
+        if policy_envelope and channel_id not in policy_envelope.allowed_channel_ids:
+            raise ValueError(f"Channel '{channel_id}' is not allowed for the current scope.")
         for channel in channels:
             if channel.channel_id == channel_id:
+                if policy_envelope and channel.formatter.formatter_id not in policy_envelope.allowed_formatter_ids:
+                    raise ValueError(
+                        f"Formatter '{channel.formatter.formatter_id}' is not allowed for channel '{channel_id}'."
+                    )
                 return channel.formatter.formatter_id
         raise ValueError(f"Unknown channel_id '{channel_id}'.")
 

@@ -10,11 +10,12 @@ A **domain-agnostic, multi-application** MCP runtime and seed layer for a broade
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Visual Workflow Builder  (React + React Flow)                  │
-│  Drag-and-drop node canvas · Config panel · Live execution      │
+│  Architecture Console  (React + React Flow)                     │
+│  Policy topology · Scenario mockups · Approval states           │
 ├─────────────────────────────────────────────────────────────────┤
 │  MCP Tool Layer  (FastMCP 3.x)                                  │
-│  execute_sql · discover_schema · agent_chat · workflows         │
+│  execute_sql · discover_schema · invoke_capability              │
+│  lifecycle review tools · agent_chat · workflows                │
 ├─────────────────────────────────────────────────────────────────┤
 │  Core Engine  (Domain-Agnostic)                                 │
 │  AppRouter → per-app context (DB, policy, registry)             │
@@ -88,6 +89,10 @@ The next plug-and-play baseline now also supports:
 - config-only channel formatter contracts in `apps.yaml`
 - registry discovery of external tools and formatter capabilities through `describe_capabilities`
 - registry-driven execution through `invoke_capability`
+- trusted admin chat over HTTP using the same request-context, planner, formatter, and lifecycle core
+- trusted admin lifecycle review, decision, registration, activation, and resume tools over MCP
+- trusted admin lifecycle review, decision, registration, activation, and resume routes over HTTP
+- dynamic discovery of activated agents through `describe_capabilities`
 
 `invoke_capability` is the first registry-consuming execution path. It can:
 
@@ -120,9 +125,26 @@ cp .env.example .env
 uv run tag-fastmcp
 ```
 
-Server runs at `http://127.0.0.1:8001/mcp` (streamable-http transport).
+Server runs at `http://127.0.0.1:8001`.
 
-### 2. Visual Workflow Builder (UI)
+Available HTTP surfaces:
+
+- MCP transport: `http://127.0.0.1:8001/mcp`
+- Widget session bootstrap: `POST http://127.0.0.1:8001/session/start`
+- Widget chat stream: `POST http://127.0.0.1:8001/chat?stream=false`
+- Admin chat stream: `POST http://127.0.0.1:8001/admin/chat?stream=false`
+- Admin approval queue: `GET http://127.0.0.1:8001/admin/approvals`
+- Admin approval decision: `POST http://127.0.0.1:8001/admin/approvals/{approval_id}/decision`
+- Admin approval resume: `POST http://127.0.0.1:8001/admin/approvals/{approval_id}/resume`
+- Admin proposal list: `GET http://127.0.0.1:8001/admin/agents/proposals`
+- Admin proposal register: `POST http://127.0.0.1:8001/admin/agents/proposals/{proposal_id}/register`
+- Admin registration list: `GET http://127.0.0.1:8001/admin/agents/registrations`
+- Admin registration activate: `POST http://127.0.0.1:8001/admin/agents/registrations/{registration_id}/activate`
+- Health probe: `GET http://127.0.0.1:8001/healthz`
+
+Admin HTTP routes currently expect a development-time `x-admin-context` header containing base64-encoded JSON for actor, role, scopes, and allowed apps. This is a transport placeholder until real auth integration lands. Admin chat now runs through the live bounded `admin_orchestration` runtime, while heavy cross-db execution and real auth are still later steps.
+
+### 2. Architecture Console (UI)
 
 ```bash
 cd ui
@@ -130,7 +152,7 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:3000`. The Vite dev server proxies `/mcp` calls to the backend.
+Opens at `http://localhost:3000`. The UI now combines the Phase 7 architecture console with a live browser surface for widget chat, admin chat, approvals, proposals, and registration activation. The Vite dev server proxies `/session`, `/chat`, `/admin`, `/healthz`, and `/mcp` to the backend.
 
 ### 3. Run Tests
 
@@ -145,7 +167,9 @@ uv run pytest
 | Variable | Description | Default |
 |---|---|---|
 | `TAG_FASTMCP_DATABASE_URL` | Async runtime DB connection string | `sqlite+aiosqlite:///data/tag_fastmcp.sqlite3` |
+| `TAG_FASTMCP_CONTROL_PLANE_DATABASE_URL` | Async DB for approvals, proposal drafts, registrations, and lifecycle audit records; defaults to `TAG_FASTMCP_DATABASE_URL` when unset | unset |
 | `TAG_FASTMCP_APPS_CONFIG_PATH` | Path to the multi-app registry YAML | `apps.yaml` |
+| `TAG_FASTMCP_DEFAULT_CHAT_APP_ID` | Default app for widget chat when no `x-app-id` is supplied | unset |
 | `TAG_FASTMCP_LLM_BASE_URL` | vLLM-compatible API endpoint | `http://192.168.15.112:8000/v1` |
 | `TAG_FASTMCP_LLM_MODEL` | Model name for the agent | `default` |
 | `TAG_FASTMCP_HOST` | Server bind address | `127.0.0.1` |
@@ -164,23 +188,40 @@ uv run pytest
 ```
 ├── src/tag_fastmcp/
 │   ├── app.py                     # FastMCP app factory
+│   ├── http_api.py                # Widget/admin HTTP adapters + mounted /mcp server
 │   ├── settings.py                # Environment-backed settings
 │   ├── core/
 │   │   ├── app_router.py          # Multi-app context resolver
+│   │   ├── agent_registry.py      # Bounded agent catalog and selection rules
+│   │   ├── agent_lifecycle_service.py # Proposal draft, registration, and activation lifecycle
+│   │   ├── admin_service.py       # Shared admin lifecycle transport logic
+│   │   ├── admin_chat_service.py  # Shared admin chat orchestration bridge
+│   │   ├── approval_service.py    # Durable approval requests, decisions, and resume gates
 │   │   ├── capability_router.py   # Registry-driven execution and dispatch
 │   │   ├── capability_registry.py # Plug-and-play capability discovery
+│   │   ├── chat_service.py        # Widget chat/session orchestration
 │   │   ├── circuit_breaker.py     # External MCP dependency breaker state
 │   │   ├── container.py           # Dependency graph
+│   │   ├── control_plane_store.py # Local durable lifecycle record storage
+│   │   ├── formatter_service.py   # Visibility-aware channel response rendering
+│   │   ├── intent_planner.py      # Deterministic NL intent analysis and candidate ranking
+│   │   ├── orchestration_service.py # Planner/compiler coordination for chat and direct-tool paths
+│   │   ├── plan_compiler.py       # Compile orchestration decisions into routed execution requests
+│   │   ├── policy_envelope.py     # Scope and capability enforcement
 │   │   ├── query_engine.py        # Async SQL executor
+│   │   ├── request_context.py     # Trusted request normalization
 │   │   ├── schema_discovery.py    # Auto-introspect any database
 │   │   ├── sql_policy.py          # SQL validation & mutation policy
 │   │   ├── session_store.py       # Session timeline + memory/Valkey backends
 │   │   ├── idempotency.py         # Replay-safe response store + memory/Valkey backends
 │   │   ├── response_builder.py    # Typed response envelopes
+│   │   ├── visibility_policy.py   # Role-aware visibility derivation
 │   │   ├── workflow_engine.py     # Guided workflow state
 │   │   └── domain_registry.py     # Manifest loading
 │   ├── agent/
+│   │   ├── admin_orchestration_agent.py # Live bounded admin orchestration runtime
 │   │   ├── clarification_agent.py # vLLM-powered clarification
+│   │   ├── stubs.py               # Phase 3 stub agents for later runtimes
 │   │   └── prompts.py             # System prompts for agent
 │   ├── models/
 │   │   ├── contracts.py           # Typed request/response models
@@ -190,19 +231,20 @@ uv run pytest
 │   └── tools/
 │       ├── query_tools.py         # execute_sql, summarize
 │       ├── routing_tools.py       # invoke_capability
+│       ├── lifecycle_tools.py     # approval review, registration, activation, resume
 │       ├── schema_tools.py        # discover_schema
 │       ├── agent_tools.py         # agent_chat
 │       ├── report_tools.py        # run_report
 │       ├── workflow_tools.py      # start/continue workflow
 │       ├── builder_tools.py       # graph validation
 │       └── system_tools.py        # health, session info
-├── ui/                            # Visual Workflow Builder
+├── ui/                            # Architecture console / visual artifacts demo
 │   ├── src/
-│   │   ├── App.jsx                # React Flow canvas
-│   │   ├── nodes/WorkflowNode.jsx # Custom node component
-│   │   └── components/
-│   │       ├── Sidebar.jsx        # Draggable node palette
-│   │       └── ConfigPanel.jsx    # Node configuration panel
+│   │   ├── App.jsx                # Architecture console plus live runtime surface
+│   │   ├── components/
+│   │   │   └── LiveConsole.jsx    # Live widget/admin/lifecycle browser console
+│   │   └── nodes/
+│   │       └── SystemNode.jsx     # Topology node component
 │   ├── package.json
 │   └── vite.config.js
 ├── domains/                       # Domain manifests (YAML)
@@ -257,6 +299,19 @@ uv run pytest
          supports_streaming: true
          supports_actions: true
    ```
+
+## Widget Compatibility
+
+The repository now exposes a lightweight HTTP adapter for the existing KritiBot widget contract.
+
+Expected widget calls:
+
+- `POST /session/start`
+- `POST /chat?stream=false`
+- `x-app-id` header when multiple apps are configured
+- `x-user-context` header with base64-encoded JSON user metadata
+
+The adapter keeps session continuity in the internal core and routes text chat through the clarification agent for the selected application.
 
 4. All MCP tool calls now accept `app_id: "my_app"` to route to the correct context, and `describe_capabilities` will expose the new app, external server tools, and formatter contracts.
 

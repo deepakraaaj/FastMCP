@@ -24,11 +24,20 @@ async def test_valkey_session_store_persists_session_state() -> None:
             collected_data={"title": "Inspect gearbox"},
         ),
     )
+    await store.bind_scope(
+        session.session_id,
+        app_id="maintenance",
+        tenant_id="tenant-7",
+        execution_mode="app_chat",
+    )
 
     snapshot = await store.get(session.session_id)
     ttl = await client.ttl(f"test-tag-fastmcp:session:{session.session_id}")
 
     assert snapshot.actor_id == "worker-1"
+    assert snapshot.tenant_id == "tenant-7"
+    assert snapshot.bound_app_id == "maintenance"
+    assert snapshot.execution_mode == "app_chat"
     assert snapshot.history == [{"type": "sql", "row_count": 2}]
     assert snapshot.last_query == "SELECT id FROM tasks WHERE status = 'pending'"
     assert snapshot.active_workflow is not None

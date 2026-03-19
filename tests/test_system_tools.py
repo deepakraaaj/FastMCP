@@ -11,7 +11,7 @@ async def test_describe_capabilities_returns_registry_snapshot(test_app) -> None
     assert payload["route"] == "SYSTEM"
     assert payload["status"] == "ok"
     assert payload["meta"]["app_count"] == 1
-    assert payload["meta"]["agent_count"] == 1
+    assert payload["meta"]["agent_count"] == 5
     assert payload["meta"]["mcp_server_count"] == 2
 
     registry = payload["registry"]
@@ -27,6 +27,12 @@ async def test_describe_capabilities_returns_registry_snapshot(test_app) -> None
     server_ids = {item["server_id"] for item in registry["mcp_servers"]}
     assert "mcp.tag_fastmcp" in server_ids
     assert "github" in server_ids
+
+    agents = {item["agent_id"]: item for item in registry["agents"]}
+    assert "agent.app_scoped_chat" in agents
+    assert agents["agent.app_scoped_chat"]["runtime_state"] == "active"
+    assert agents["agent.admin_orchestration"]["runtime_state"] == "active"
+    assert agents["agent.heavy_cross_db"]["requires_envelope_flag"] == "allow_heavy_agent"
 
     channels = {item["channel_id"]: item for item in registry["channels"]}
     assert "web_chat" in channels

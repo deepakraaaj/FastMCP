@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
+from functools import lru_cache
 from typing import Literal
 
 from pydantic import AliasChoices, Field
@@ -43,7 +43,9 @@ class AppSettings(BaseSettings):
     session_ttl_seconds: int = Field(default=86_400, ge=0)
     idempotency_ttl_seconds: int = Field(default=86_400, ge=0)
     database_url: str = "sqlite+aiosqlite:///data/tag_fastmcp.sqlite3"
+    control_plane_database_url: str | None = None
     apps_config_path: Path = PROJECT_ROOT / "apps.yaml"
+    default_chat_app_id: str | None = None
     llm_base_url: str = "http://192.168.15.112:8000/v1"
     llm_model: str = "default"
     root_path: Path = PROJECT_ROOT

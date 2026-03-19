@@ -1,0 +1,36 @@
+name: remp_local
+description: "Localhost REMP maintenance demo application"
+allowed_tables:
+  - facility
+  - scheduler_details
+  - scheduler_task_details
+  - task_description
+protected_tables:
+  - flyway_schema_history
+reports:
+  scheduler_task_menu:
+    description: "Join live localhost REMP scheduler, facility, and task data for demo routing."
+    sql: >
+      SELECT
+        std.id AS scheduler_task_id,
+        f.id AS facility_id,
+        f.name AS facility_name,
+        td.id AS task_description_id,
+        td.name AS task_name,
+        sd.id AS schedule_id,
+        sd.name AS schedule_name,
+        std.priority
+      FROM scheduler_task_details std
+      JOIN facility f ON f.id = std.facility_id
+      JOIN task_description td ON td.id = std.task_description_id
+      JOIN scheduler_details sd ON sd.id = std.sche_details_id
+      WHERE std.facility_id IS NOT NULL
+workflows:
+  create_scheduler_task:
+    description: "Guided collection of scheduler task fields using IDs returned from localhost REMP data."
+    required_fields:
+      - title
+      - facility_id
+      - schedule_id
+      - task_description_id
+      - priority

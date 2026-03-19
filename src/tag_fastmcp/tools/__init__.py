@@ -1,4 +1,5 @@
 from tag_fastmcp.tools.builder_tools import register_builder_tools
+from tag_fastmcp.tools.lifecycle_tools import register_lifecycle_tools
 from tag_fastmcp.tools.query_tools import register_query_tools
 from tag_fastmcp.tools.report_tools import register_report_tools
 from tag_fastmcp.tools.routing_tools import register_routing_tools
@@ -9,6 +10,7 @@ from tag_fastmcp.tools.workflow_tools import register_workflow_tools
 
 __all__ = [
     "register_builder_tools",
+    "register_lifecycle_tools",
     "register_query_tools",
     "register_report_tools",
     "register_routing_tools",

@@ -6,6 +6,7 @@ from tag_fastmcp.core.container import AppContainer, build_container, get_contai
 from tag_fastmcp.settings import AppSettings, get_settings
 from tag_fastmcp.tools import (
     register_builder_tools,
+    register_lifecycle_tools,
     register_query_tools,
     register_report_tools,
     register_routing_tools,
@@ -29,6 +30,7 @@ def create_app(settings: AppSettings | None = None, container: AppContainer | No
     )
     register_system_tools(app, resolved_container)
     register_builder_tools(app, resolved_container)
+    register_lifecycle_tools(app, resolved_container)
     register_query_tools(app, resolved_container)
     register_report_tools(app, resolved_container)
     register_routing_tools(app, resolved_container)

@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from tag_fastmcp.core.database_urls import normalize_database_url
 from tag_fastmcp.models.schema_models import (
     ColumnInfo,
     DatabaseSchema,
@@ -17,7 +18,7 @@ class SchemaDiscovery:
     """Introspects any database and returns its structure using SQLAlchemy."""
 
     def __init__(self, database_url: str):
-        self._engine = create_async_engine(database_url)
+        self._engine = create_async_engine(normalize_database_url(database_url))
 
     async def discover(self) -> DatabaseSchema:
         """Returns all tables, columns, types, PKs, FKs."""

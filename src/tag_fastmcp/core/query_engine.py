@@ -5,14 +5,15 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from tag_fastmcp.core.database_urls import normalize_database_url
 from tag_fastmcp.models.contracts import PolicyDecision, ReportResultPayload, SQLResultPayload
 
 
 class AsyncQueryEngine:
     def __init__(self, database_url: str, default_row_limit: int) -> None:
-        self.database_url = database_url
+        self.database_url = normalize_database_url(database_url)
         self.default_row_limit = default_row_limit
-        self._engine = create_async_engine(database_url, pool_pre_ping=True)
+        self._engine = create_async_engine(self.database_url, pool_pre_ping=True)
 
     def _ensure_limit(self, sql: str) -> str:
         # Simple string-based limit check to avoid heavy sqlglot dependency in hot path
