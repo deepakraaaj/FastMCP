@@ -1,0 +1,9 @@
+apps:
+  maintenance:
+    display_name: "FITS Maintenance"
+    database_url: "sqlite+aiosqlite:///data/demo_maintenance.sqlite3"
+    manifest: "domains/demo_maintenance.yaml"
+  dispatch:
+    display_name: "Field Dispatch"
+    database_url: "sqlite+aiosqlite:///data/demo_dispatch.sqlite3"
+    manifest: "domains/demo_dispatch.yaml"

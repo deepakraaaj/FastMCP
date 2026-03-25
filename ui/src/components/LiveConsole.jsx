@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 
 const DEFAULT_WIDGET_FORM = {
-  appId: 'maintenance',
-  userId: 'u-123',
+  appId: 'fits',
+  userId: 'u-demo-01',
   userName: 'Deepak',
   companyId: 'northfield',
   companyName: 'Northfield Energy',
@@ -23,11 +23,11 @@ const DEFAULT_ADMIN_FORM = {
   actorId: 'platform-admin',
   role: 'platform_admin',
   tenantId: 'northfield',
-  allowedAppIds: 'maintenance, dispatch',
+  allowedAppIds: 'fits',
   authScopes: 'apps:*',
   appId: '',
   channelId: 'web_chat',
-  message: 'Compare maintenance and dispatch overdue tasks and reconcile the differences.',
+  message: 'Show overdue maintenance tasks for Plant Alpha and summarize the backlog.',
 };
 
 const DEFAULT_FILTERS = {
@@ -653,7 +653,7 @@ export default function LiveConsole() {
               <input
                 value={adminForm.allowedAppIds}
                 onChange={(event) => updateAdminForm('allowedAppIds', event.target.value)}
-                placeholder="maintenance, dispatch"
+                placeholder="fits"
               />
             </label>
             <label className="form-field--full">

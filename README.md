@@ -121,11 +121,16 @@ uv sync
 cp .env.example .env
 # Edit `.env` with your apps config, database, LLM, and optional Valkey settings
 
+# Optional: run the bundled demo apps instead of your primary config
+# TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml
+
 # Start the MCP server
 uv run tag-fastmcp
 ```
 
 Server runs at `http://127.0.0.1:8001`.
+
+When `TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml`, startup now auto-seeds the bundled SQLite maintenance and dispatch demo databases so the widget and admin console have sample data immediately.
 
 Available HTTP surfaces:
 

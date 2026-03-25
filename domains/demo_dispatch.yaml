@@ -1,0 +1,37 @@
+name: dispatch
+description: "Field Dispatch – technician scheduling, service visits, and dispatch tracking."
+allowed_tables:
+  - dispatches
+  - technicians
+  - service_areas
+protected_tables:
+  - schema_migrations
+reports:
+  pending_dispatches:
+    description: "Show pending and delayed field dispatches with technician and service area."
+    sql: >
+      SELECT d.id, d.title, d.status, d.priority, d.scheduled_date,
+             t.name AS technician, sa.name AS service_area
+      FROM dispatches d
+      JOIN technicians t ON t.id = d.technician_id
+      JOIN service_areas sa ON sa.id = d.service_area_id
+      WHERE d.status IN ('pending', 'delayed')
+  dispatch_summary:
+    description: "Summary of dispatch counts per service area."
+    sql: >
+      SELECT sa.name AS service_area, sa.region,
+             COUNT(d.id) AS total_dispatches,
+             SUM(CASE WHEN d.status = 'delayed' THEN 1 ELSE 0 END) AS delayed,
+             SUM(CASE WHEN d.status = 'pending' THEN 1 ELSE 0 END) AS pending
+      FROM service_areas sa
+      LEFT JOIN dispatches d ON d.service_area_id = sa.id
+      GROUP BY sa.id
+workflows:
+  create_dispatch:
+    description: "Guided creation of a field dispatch assignment."
+    required_fields:
+      - title
+      - technician_id
+      - service_area_id
+      - priority
+      - scheduled_date

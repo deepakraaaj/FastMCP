@@ -158,6 +158,7 @@ The larger platform around this repo should own:
 - shared admin lifecycle HTTP adapter for dashboard or console integrations
 - shared admin chat HTTP adapter layered over the planner, formatter, and lifecycle core
 - live browser console over widget chat, admin chat, approvals, proposals, and registration activation
+- optional demo multi-app bootstrap through `apps.demo.yaml` with auto-seeded SQLite maintenance and dispatch datasets
 - bootstrapped development database
 - AI handoff docs included from the start
 

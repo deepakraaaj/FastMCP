@@ -137,6 +137,21 @@ def create_http_app(
 
     @asynccontextmanager
     async def lifespan(_: Starlette):
+        # Auto-seed demo databases on startup
+        try:
+            from scripts.seed_demo import seed_all as _seed_demo
+            await _seed_demo()
+        except Exception:
+            import sys, importlib, pathlib
+            seed_path = pathlib.Path(__file__).resolve().parents[2] / "scripts"
+            if str(seed_path) not in sys.path:
+                sys.path.insert(0, str(seed_path))
+            try:
+                seed_mod = importlib.import_module("seed_demo")
+                await seed_mod.seed_all()
+            except Exception as seed_err:
+                import logging
+                logging.getLogger("tag_fastmcp").warning("Demo seed skipped: %s", seed_err)
         try:
             yield
         finally:

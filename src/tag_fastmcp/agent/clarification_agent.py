@@ -36,9 +36,23 @@ class ClarificationAgent:
             messages.extend(history)
         messages.append({"role": "user", "content": user_message})
 
-        response = await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=0.1,
-        )
-        return response.choices[0].message.content or "I'm sorry, I couldn't process that."
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.1,
+            )
+            return response.choices[0].message.content or "I'm sorry, I couldn't process that."
+        except Exception:
+            # Graceful fallback when the LLM endpoint is unreachable
+            reports = list(manifest.reports.keys())
+            workflows = list(manifest.workflows.keys())
+            tables = list(schema.tables.keys())
+            parts: list[str] = [
+                f"I'm the {app_ctx.display_name} assistant for app '{app_ctx.app_id}'.",
+                f"Available reports: {', '.join(reports) if reports else 'none'}.",
+                f"Available workflows: {', '.join(workflows) if workflows else 'none'}.",
+                f"Database tables: {', '.join(tables[:8]) if tables else 'none'}.",
+                f"Try asking me to 'show overdue tasks' or 'create a task'.",
+            ]
+            return " ".join(parts)

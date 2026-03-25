@@ -37,6 +37,7 @@ Use these long-term ownership boundaries:
 - development domain manifest
 - localhost demo path via `apps.local.yaml` plus `domains/remp_local.yaml` for a real MySQL-backed management walkthrough
 - compatibility HTTP adapter for the existing chatbot widget with `/session/start` and `/chat` mounted alongside `/mcp`
+- optional `apps.demo.yaml` bootstrap with auto-seeded SQLite maintenance and dispatch demo datasets for local console walkthroughs
 - core chat service for widget session history, planner entry, and clarification-agent fallback
 - core admin chat service for trusted admin context, planner entry, live admin orchestration runtime, approval/proposal pause points, and formatter output
 - Phase 2 request-context and policy-envelope services with session-bound app scope

@@ -1,0 +1,62 @@
+name: maintenance
+description: "FITS Maintenance – preventive and corrective work orders, parts inventory, and facility management."
+allowed_tables:
+  - tasks
+  - facilities
+  - locations
+  - parts
+  - task_parts
+  - technicians
+protected_tables:
+  - schema_migrations
+reports:
+  overdue_tasks:
+    description: "Show overdue maintenance tasks with facility and technician info."
+    sql: >
+      SELECT t.id, t.title, t.status, t.priority,
+             f.name AS facility, tc.name AS technician
+      FROM tasks t
+      JOIN facilities f ON f.id = t.facility_id
+      LEFT JOIN technicians tc ON tc.id = t.technician_id
+      WHERE t.status = 'overdue'
+  task_menu:
+    description: "Multi-table join to show available facilities, locations, and parts for task selection."
+    sql: >
+      SELECT
+        f.name AS facility,
+        l.section AS location,
+        p.name AS part_name,
+        p.stock_count,
+        f.id AS facility_id,
+        l.id AS location_id,
+        p.id AS part_id
+      FROM facilities f
+      JOIN locations l ON l.facility_id = f.id
+      CROSS JOIN parts p
+      WHERE p.stock_count > 0
+  facility_summary:
+    description: "Summary of task counts per facility."
+    sql: >
+      SELECT f.name AS facility, f.region,
+             COUNT(t.id) AS total_tasks,
+             SUM(CASE WHEN t.status = 'overdue' THEN 1 ELSE 0 END) AS overdue,
+             SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress
+      FROM facilities f
+      LEFT JOIN tasks t ON t.facility_id = f.id
+      GROUP BY f.id
+workflows:
+  create_task:
+    description: "Simple maintenance task creation."
+    required_fields:
+      - title
+      - facility_id
+      - priority
+  create_complex_task:
+    description: "Guided creation of a task with location and part assignment."
+    required_fields:
+      - title
+      - facility_id
+      - location_id
+      - part_id
+      - part_quantity
+      - priority
