@@ -28,6 +28,19 @@ class WidgetSessionStartResponse(BaseModel):
     app_id: str
 
 
+class WidgetAppOption(BaseModel):
+    app_id: str
+    display_name: str
+    description: str | None = None
+    domain_name: str | None = None
+    allowed_tables: list[str] = Field(default_factory=list)
+
+
+class WidgetAppListResponse(BaseModel):
+    apps: list[WidgetAppOption] = Field(default_factory=list)
+    default_app_id: str | None = None
+
+
 class WidgetChatRequest(BaseModel):
     session_id: str
     message: str = Field(..., min_length=1)

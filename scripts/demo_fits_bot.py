@@ -10,6 +10,7 @@ import anyio
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.utilities.logging import configure_logging
+import yaml
 
 from tag_fastmcp.app import create_app
 from tag_fastmcp.settings import AppSettings, PROJECT_ROOT
@@ -59,8 +60,20 @@ def _configure_demo_logging() -> None:
     )
 
 
+def _apps_config_contains_app(path: Path, app_id: str) -> bool:
+    if not path.exists():
+        return False
+    with path.open("r", encoding="utf-8") as handle:
+        payload = yaml.safe_load(handle) or {}
+    apps = payload.get("apps") or {}
+    return app_id in apps
+
+
 def _resolve_demo_settings() -> AppSettings:
-    apps_config_path = LOCAL_APPS_CONFIG_PATH if LOCAL_APPS_CONFIG_PATH.exists() else PROJECT_ROOT / "apps.yaml"
+    if _apps_config_contains_app(LOCAL_APPS_CONFIG_PATH, DEMO_APP_ID):
+        apps_config_path = LOCAL_APPS_CONFIG_PATH
+    else:
+        apps_config_path = PROJECT_ROOT / "apps.yaml"
     return AppSettings(
         apps_config_path=apps_config_path,
         root_path=PROJECT_ROOT,

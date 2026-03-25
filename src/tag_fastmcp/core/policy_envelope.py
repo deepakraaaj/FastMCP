@@ -227,6 +227,7 @@ class PolicyEnvelopeService:
         if execution_mode == "admin_chat":
             return {
                 "tool.agent_chat",
+                "tool.generate_understanding_doc",
                 "tool.list_approval_queue",
                 "tool.decide_approval",
                 "tool.resume_approved_execution",
@@ -250,6 +251,7 @@ class PolicyEnvelopeService:
                 "tool.start_session",
                 "tool.describe_domain",
                 "tool.describe_capabilities",
+                "tool.generate_understanding_doc",
                 "tool.list_approval_queue",
                 "tool.decide_approval",
                 "tool.resume_approved_execution",
@@ -286,8 +288,8 @@ class PolicyEnvelopeService:
             profiles[app_id] = SqlPolicyProfile(
                 allowed_tables=list(manifest.allowed_tables),
                 protected_tables=list(manifest.protected_tables),
-                allow_mutations=self.settings.allow_mutations,
-                require_select_where=self.settings.require_select_where,
+                allow_mutations=app_ctx.sql_policy.allow_mutations,
+                require_select_where=app_ctx.sql_policy.require_select_where,
             )
         return profiles
 

@@ -23,6 +23,7 @@ Use these long-term ownership boundaries:
 
 - FastMCP app factory and server entrypoint
 - typed capability registry and `describe_capabilities` discovery tool
+- config-only app onboarding through `apps.yaml`, with optional manifest fallback for domain contracts
 - config-only external MCP server registration and channel formatter contracts through `apps.yaml`
 - registry-driven execution through `invoke_capability`
 - timeout, retry, circuit-breaker, and fallback handling for registered external MCP tools
@@ -31,17 +32,19 @@ Use these long-term ownership boundaries:
 - idempotency store with memory and Valkey backends
 - SQL policy validator
 - SQLite-backed query engine
-- report execution from manifest
+- report execution from configured domain contracts
 - workflow start/continue skeleton
 - builder graph validation + FastMCP preview bridge
-- development domain manifest
+- development domain contract examples
 - localhost demo path via `apps.local.yaml` plus `domains/remp_local.yaml` for a real MySQL-backed management walkthrough
 - compatibility HTTP adapter for the existing chatbot widget with `/session/start` and `/chat` mounted alongside `/mcp`
 - optional `apps.demo.yaml` bootstrap with auto-seeded SQLite maintenance and dispatch demo datasets for local console walkthroughs
 - core chat service for widget session history, planner entry, and clarification-agent fallback
 - core admin chat service for trusted admin context, planner entry, live admin orchestration runtime, approval/proposal pause points, and formatter output
+- admin HTTP bearer JWT auth baseline with trusted claim-to-context mapping and development header fallback
 - Phase 2 request-context and policy-envelope services with session-bound app scope
-- Phase 3 agent registry with five approved agent classes, bounded selection rules, and a live admin orchestration runtime
+- Phase 3 agent registry with five approved agent classes, bounded selection rules, a live admin orchestration runtime, and a live schema-intelligence understanding-doc runtime
+- interactive understanding-workbook capture service plus `scripts/capture_understanding.py` for schema-plus-sample-row onboarding interviews
 - Phase 4 intent planner, plan compiler, and orchestration service for bounded report, workflow, external-tool, rejection, and heavy-escalation decisions
 - Phase 5 visibility policy and formatter service with rich widget stream support and presentation attached to routed responses
 - Phase 6 local durable control-plane store plus approval and agent lifecycle services for paused execution, proposal drafts, registration, activation, and audit records
@@ -58,10 +61,10 @@ Use these long-term ownership boundaries:
 
 - use `docs/codex-implementation-prompts.md` as the default execution pack for phased Codex implementation
 - extend the existing `RequestContext`, `PolicyEnvelope`, planner, and orchestration baseline into real admin flows
-- extend the existing agent registry from catalog and selection scaffolding into real admin, schema, heavy, and proposal runtimes
-- replace the development-time `x-admin-context` placeholder with real trusted auth
+- extend the existing agent registry from catalog and selection scaffolding into richer heavy and proposal runtimes beyond the current admin and schema baselines
+- extend the current admin bearer JWT baseline into full IdP/JWKS-backed trusted auth for admin and future widget surfaces
 - harden the current live console into a production admin dashboard UX on top of the existing admin HTTP lifecycle surface
-- promote the capability registry from manifest-derived discovery into the formal onboarding contract for adapters and routing
+- promote the capability registry from config-derived discovery into the formal onboarding contract for adapters and routing
 - formalize the conversation and orchestration layer so the current deterministic planner can move into LangGraph cleanly
 - design the MCP registry and routing control plane around PostgreSQL-backed durable records
 - auth provider integration

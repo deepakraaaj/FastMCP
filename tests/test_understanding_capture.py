@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from tag_fastmcp.agent.schema_intelligence_agent import SchemaIntelligenceAgent
 from tag_fastmcp.core.domain_registry import DomainManifest, DomainRegistry, ReportSpec, WorkflowSpec
+from tag_fastmcp.core.understanding_capture import UnderstandingCaptureService
 from tag_fastmcp.models.schema_models import ColumnInfo, DatabaseSchema, ForeignKeyInfo, TableSchema
 
 
@@ -15,6 +15,14 @@ class _StubSchemaDiscovery:
 
     async def discover(self) -> DatabaseSchema:
         return self._schema
+
+
+class _StubQueryEngine:
+    def __init__(self, rows_by_table: dict[str, list[dict[str, object]]]) -> None:
+        self._rows_by_table = rows_by_table
+
+    async def sample_rows(self, table_name: str, limit: int = 5) -> list[dict[str, object]]:
+        return self._rows_by_table.get(table_name, [])[:limit]
 
 
 def _fake_app_context() -> SimpleNamespace:
@@ -55,31 +63,31 @@ def _fake_app_context() -> SimpleNamespace:
                 description="Show overdue tasks.",
                 sql="SELECT * FROM tasks WHERE status = 'overdue'",
             ),
-            "complex_task_menu": ReportSpec(
-                description="Show the complex task menu.",
-                sql="SELECT id, title FROM tasks",
-            ),
         },
         workflows={
             "create_task": WorkflowSpec(
                 description="Create a task.",
                 required_fields=["title", "facility_id", "priority"],
             ),
-            "create_complex_task": WorkflowSpec(
-                description="Create a complex task.",
-                required_fields=["title", "facility_id", "location_id", "part_id"],
-            ),
         },
-    )
-    domain_registry = DomainRegistry(
-        manifest=manifest,
-        source_label="config:apps.maintenance",
     )
     return SimpleNamespace(
         app_id="maintenance",
         display_name="Maintenance Test",
-        domain_registry=domain_registry,
+        domain_registry=DomainRegistry(manifest=manifest, source_label="config:apps.maintenance"),
         schema_discovery=_StubSchemaDiscovery(schema),
+        query_engine=_StubQueryEngine(
+            {
+                "tasks": [
+                    {"id": 1, "facility_id": 10, "title": "Inspect motor", "status": "pending"},
+                    {"id": 2, "facility_id": 11, "title": "Replace filter", "status": "overdue"},
+                ],
+                "facilities": [
+                    {"id": 10, "name": "Plant Alpha"},
+                    {"id": 11, "name": "Plant Beta"},
+                ],
+            }
+        ),
         sql_policy=SimpleNamespace(
             allow_mutations=False,
             require_select_where=True,
@@ -88,31 +96,43 @@ def _fake_app_context() -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_schema_intelligence_agent_summarizes_allowed_schema() -> None:
+async def test_understanding_capture_builds_workbook_with_samples_and_questions() -> None:
     app_ctx = _fake_app_context()
+    service = UnderstandingCaptureService()
 
-    document = await SchemaIntelligenceAgent().generate_understanding_doc(app_ctx, max_tables=5)
+    workbook = await service.build_workbook(
+        app_ctx,
+        max_tables=5,
+        sample_rows_per_table=2,
+    )
 
-    assert document.app_id == "maintenance"
-    assert document.display_name == "Maintenance Test"
-    assert document.allowed_table_count == 2
-    assert document.report_ids == ["complex_task_menu", "overdue_tasks"]
-    assert document.workflow_ids == ["create_complex_task", "create_task"]
-    assert [table.table_name for table in document.table_summaries] == ["tasks", "facilities"]
-    assert document.safe_query_examples
-    assert document.suggested_questions
-    assert "## Tables" in document.markdown
+    assert workbook.app_id == "maintenance"
+    assert [sample.table_name for sample in workbook.table_samples] == ["tasks", "facilities"]
+    assert any(question.question_id == "app.business_goal" for question in workbook.questions)
+    assert any(question.question_id == "table.tasks.purpose" for question in workbook.questions)
+    assert any(question.question_id == "table.tasks.status_meaning" for question in workbook.questions)
+    assert "## Sample Rows" in workbook.markdown
+    assert "Plant Alpha" in workbook.markdown
 
 
 @pytest.mark.asyncio
-async def test_schema_intelligence_agent_emits_relationship_hints_and_markdown() -> None:
+async def test_understanding_capture_applies_answers_into_markdown() -> None:
     app_ctx = _fake_app_context()
+    service = UnderstandingCaptureService()
 
-    document = await SchemaIntelligenceAgent().generate_understanding_doc(app_ctx, max_tables=5)
+    workbook = await service.build_workbook(
+        app_ctx,
+        max_tables=5,
+        sample_rows_per_table=2,
+    )
+    completed = service.apply_answers(
+        workbook,
+        {
+            "app.business_goal": "Help maintenance teams track and update work orders safely.",
+            "table.tasks.purpose": "Stores the maintenance work orders handled by the chatbot.",
+        },
+    )
 
-    assert len(document.relationship_hints) == 1
-    hint = document.relationship_hints[0]
-    assert hint.join_condition == "tasks.facility_id = facilities.id"
-    assert hint.relationship_summary == "tasks references facilities."
-    assert "## Relationship Hints" in document.markdown
-    assert "tasks.facility_id = facilities.id" in document.markdown
+    assert completed.answers["app.business_goal"].startswith("Help maintenance teams")
+    assert "Answer: Help maintenance teams track and update work orders safely." in completed.markdown
+    assert "Answer: Stores the maintenance work orders handled by the chatbot." in completed.markdown

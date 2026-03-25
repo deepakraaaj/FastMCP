@@ -4,6 +4,7 @@ import base64
 import json
 from pathlib import Path
 
+import jwt
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
@@ -13,8 +14,28 @@ from tag_fastmcp.models.contracts import InvokeCapabilityRequest
 from tag_fastmcp.settings import AppSettings
 
 
+ADMIN_JWT_SECRET = "test-admin-secret"
+
+
 def _context_header(payload: dict[str, object]) -> str:
     return base64.b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+
+
+def _admin_bearer_headers(payload: dict[str, object], *, secret: str = ADMIN_JWT_SECRET) -> dict[str, str]:
+    claims = {
+        "sub": payload.get("auth_subject") or payload.get("actor_id") or "admin-user",
+        "role": payload.get("role", "platform_admin"),
+    }
+    if payload.get("actor_id") is not None:
+        claims["actor_id"] = payload["actor_id"]
+    if payload.get("tenant_id") is not None:
+        claims["tenant_id"] = payload["tenant_id"]
+    if payload.get("auth_scopes") is not None:
+        claims["scope"] = payload["auth_scopes"]
+    if payload.get("allowed_app_ids") is not None:
+        claims["allowed_app_ids"] = payload["allowed_app_ids"]
+    token = jwt.encode(claims, secret, algorithm="HS256")
+    return {"authorization": f"Bearer {token}"}
 
 
 async def _bootstrap_widget_database(container) -> None:  # type: ignore[no-untyped-def]
@@ -115,6 +136,29 @@ async def test_widget_session_start_returns_session_and_app(app_settings) -> Non
     snapshot = await container.session_store.get(payload["session_id"])
     assert snapshot.bound_app_id == "maintenance"
     assert snapshot.execution_mode == "app_chat"
+
+
+async def test_apps_endpoint_lists_available_apps(app_settings) -> None:
+    container = build_container(app_settings)
+    app = create_http_app(settings=app_settings, container=container)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/apps")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["default_app_id"] == "maintenance"
+    assert payload["apps"][0]["app_id"] == "maintenance"
+    assert payload["apps"][0]["display_name"] == "Maintenance Test"
+    assert payload["apps"][0]["domain_name"] == "maintenance"
+    assert payload["apps"][0]["allowed_tables"] == [
+        "tasks",
+        "facilities",
+        "locations",
+        "parts",
+        "task_parts",
+        "audit_logs",
+    ]
 
 
 async def test_widget_chat_routes_report_without_llm(monkeypatch, app_settings) -> None:
@@ -313,6 +357,36 @@ async def test_widget_chat_streams_token_and_result(monkeypatch, app_settings) -
     assert snapshot.bound_app_id == "maintenance"
 
 
+async def test_widget_chat_streams_development_error_detail(monkeypatch, app_settings) -> None:
+    async def fail_chat(*args, **kwargs) -> str:  # type: ignore[no-untyped-def]
+        raise RuntimeError("database connection failed")
+
+    monkeypatch.setattr(
+        "tag_fastmcp.core.chat_service.ChatService.chat",
+        fail_chat,
+    )
+
+    container = build_container(app_settings)
+    app = create_http_app(settings=app_settings, container=container)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        chat_response = await client.post(
+            "/chat?rich=true",
+            json={
+                "session_id": "session-dev-error",
+                "message": "Hello there",
+            },
+            headers={
+                "x-app-id": "maintenance",
+            },
+        )
+
+    assert chat_response.status_code == 200
+    events = [json.loads(line) for line in chat_response.text.splitlines() if line.strip()]
+    assert events[-1]["type"] == "error"
+    assert events[-1]["message"] == "database connection failed"
+
+
 async def test_admin_http_requires_trusted_admin_context(app_settings) -> None:
     app = create_http_app(settings=app_settings, container=build_container(app_settings))
 
@@ -321,6 +395,48 @@ async def test_admin_http_requires_trusted_admin_context(app_settings) -> None:
 
     assert response.status_code == 401
     assert "x-admin-context" in response.json()["error"]
+
+
+async def test_admin_http_requires_bearer_token_in_production(app_settings) -> None:
+    settings = app_settings.model_copy(
+        update={
+            "environment": "production",
+            "admin_auth_jwt_secret": ADMIN_JWT_SECRET,
+        }
+    )
+    app = create_http_app(settings=settings, container=build_container(settings))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/admin/approvals")
+
+    assert response.status_code == 401
+    assert "Authorization: Bearer" in response.json()["error"]
+
+
+async def test_admin_http_rejects_dev_header_in_production(app_settings) -> None:
+    settings = app_settings.model_copy(
+        update={
+            "environment": "production",
+            "admin_auth_jwt_secret": ADMIN_JWT_SECRET,
+        }
+    )
+    app = create_http_app(settings=settings, container=build_container(settings))
+    admin_header = _context_header(
+        {
+            "actor_id": "reviewer-admin",
+            "role": "app_admin",
+            "allowed_app_ids": ["maintenance"],
+        }
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(
+            "/admin/approvals",
+            headers={"x-admin-context": admin_header},
+        )
+
+    assert response.status_code == 401
+    assert "development mode" in response.json()["error"]
 
 
 async def test_admin_http_can_review_and_resume_execution(app_settings) -> None:
@@ -486,6 +602,52 @@ async def test_admin_chat_requires_trusted_admin_context(app_settings) -> None:
 
     assert response.status_code == 401
     assert "x-admin-context" in response.json()["error"]
+
+
+async def test_admin_chat_accepts_bearer_jwt_in_production(monkeypatch, app_settings) -> None:
+    async def fail_chat(*args, **kwargs) -> str:  # type: ignore[no-untyped-def]
+        raise AssertionError("The clarification agent should not run for a direct admin report route.")
+
+    monkeypatch.setattr(
+        "tag_fastmcp.agent.clarification_agent.ClarificationAgent.chat",
+        fail_chat,
+    )
+
+    settings = app_settings.model_copy(
+        update={
+            "environment": "production",
+            "admin_auth_jwt_secret": ADMIN_JWT_SECRET,
+        }
+    )
+    container = build_container(settings)
+    await _bootstrap_widget_database(container)
+    app = create_http_app(settings=settings, container=container)
+    admin_headers = _admin_bearer_headers(
+        {
+            "actor_id": "reviewer-admin",
+            "role": "app_admin",
+            "allowed_app_ids": ["maintenance"],
+        }
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.post(
+            "/admin/chat?rich=true",
+            json={
+                "message": "Show overdue tasks",
+                "app_id": "maintenance",
+                "channel_id": "web_chat",
+            },
+            headers=admin_headers,
+        )
+
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    result = events[-1]
+    assert result["type"] == "result"
+    assert result["orchestration_mode"] == "single_step"
+    assert result["primary_capability_id"] == "report.maintenance.overdue_tasks"
+    assert result["agent_kind"] == "admin_orchestration"
 
 
 async def test_admin_chat_routes_report_without_llm(monkeypatch, app_settings) -> None:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tag_fastmcp.core.domain_registry import DomainRegistry
@@ -59,7 +58,7 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
     _ToolCapabilitySpec(
         tool_name="describe_domain",
         display_name="Describe Domain",
-        description="Describe the manifest-backed domain for a specific application.",
+        description="Describe the configured domain contract for a specific application.",
         tags=("system", "discovery", "domain"),
         input_schema="describe_domain(app_id: str, trace_id?: str)",
         output_schema="ResponseEnvelope[domain]",
@@ -97,7 +96,7 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
     _ToolCapabilitySpec(
         tool_name="run_report",
         display_name="Run Report",
-        description="Execute a manifest-defined report for the selected application.",
+        description="Execute a configured report for the selected application.",
         tags=("report", "manifest"),
         input_schema="RunReportRequest",
         output_schema="ResponseEnvelope[report]",
@@ -106,7 +105,7 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
     _ToolCapabilitySpec(
         tool_name="start_workflow",
         display_name="Start Workflow",
-        description="Start a manifest-defined workflow and collect required fields.",
+        description="Start a configured workflow and collect required fields.",
         tags=("workflow", "manifest"),
         input_schema="StartWorkflowRequest",
         output_schema="ResponseEnvelope[workflow]",
@@ -129,6 +128,17 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
         input_schema="DiscoverSchemaRequest",
         output_schema="DatabaseSchema",
         validation_owner="none",
+    ),
+    _ToolCapabilitySpec(
+        tool_name="generate_understanding_doc",
+        display_name="Generate Understanding Document",
+        description="Build a structured application understanding document from the approved domain contract and discovered schema.",
+        tags=("schema", "agent", "understanding", "documentation"),
+        input_schema="GenerateUnderstandingDocRequest",
+        output_schema="UnderstandingDocResponse",
+        validation_owner="core",
+        execution_owner="agent",
+        fallback_hint="Use describe_domain and discover_schema directly when richer documentation generation is unavailable.",
     ),
     _ToolCapabilitySpec(
         tool_name="agent_chat",
@@ -253,13 +263,13 @@ class CapabilityRegistry:
         channels: list[RegistryChannelPayload] = []
 
         for selected_app_id, config in selected_apps:
-            domain_registry = DomainRegistry(self._resolve_manifest_path(config))
-            app_capabilities = self._app_capabilities(selected_app_id, config, domain_registry)
+            domain_registry = self._domain_registry(selected_app_id, config)
+            app_capabilities = self._app_capabilities(selected_app_id, domain_registry)
             apps.append(
                 RegistryAppPayload(
                     app_id=selected_app_id,
                     display_name=config.display_name,
-                    manifest_path=str(self._resolve_manifest_path(config)),
+                    manifest_path=domain_registry.source_label,
                     domain_name=domain_registry.manifest.name,
                     domain_description=domain_registry.manifest.description,
                     allowed_tables=list(domain_registry.manifest.allowed_tables),
@@ -310,11 +320,12 @@ class CapabilityRegistry:
         except KeyError as exc:
             raise KeyError(f"Unknown application ID: {app_id}") from exc
 
-    def _resolve_manifest_path(self, config: AppConfig) -> Path:
-        path = Path(config.manifest)
-        if path.is_absolute():
-            return path
-        return self.settings.root_path / path
+    def _domain_registry(self, app_id: str, config: AppConfig) -> DomainRegistry:
+        return DomainRegistry.from_app_config(
+            app_id,
+            config,
+            root_path=self.settings.root_path,
+        )
 
     @staticmethod
     def _is_visible(app_filter: str | None, app_ids: list[str]) -> bool:
@@ -347,10 +358,10 @@ class CapabilityRegistry:
     def _app_capabilities(
         self,
         app_id: str,
-        config: AppConfig,
         domain_registry: DomainRegistry,
     ) -> list[CapabilityPayload]:
         capabilities: list[CapabilityPayload] = []
+        source_label = domain_registry.source_label
 
         for report_name, report in sorted(domain_registry.manifest.reports.items()):
             capabilities.append(
@@ -361,10 +372,10 @@ class CapabilityRegistry:
                     display_name=report_name,
                     description=report.description,
                     owner="domain_manifest",
-                    source=str(self._resolve_manifest_path(config)),
-                        app_id=app_id,
-                        tags=["report", "manifest", app_id, report_name],
-                        execution=ExecutionContractPayload(
+                    source=source_label,
+                    app_id=app_id,
+                    tags=["report", "manifest", app_id, report_name],
+                    execution=ExecutionContractPayload(
                         input_schema="RunReportRequest",
                         output_schema="ResponseEnvelope[report]",
                         requires_session=True,
@@ -385,9 +396,9 @@ class CapabilityRegistry:
                     display_name=workflow_id,
                     description=workflow.description,
                     owner="domain_manifest",
-                    source=str(self._resolve_manifest_path(config)),
-                        app_id=app_id,
-                        tags=["workflow", "manifest", app_id, workflow_id],
+                    source=source_label,
+                    app_id=app_id,
+                    tags=["workflow", "manifest", app_id, workflow_id],
                     execution=ExecutionContractPayload(
                         input_schema="StartWorkflowRequest / ContinueWorkflowRequest",
                         output_schema="ResponseEnvelope[workflow]",

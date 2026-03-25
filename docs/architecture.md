@@ -161,6 +161,7 @@ The baseline Phase 3 runtime implementation now exists in:
 
 - `src/tag_fastmcp/core/agent_registry.py`
 - `src/tag_fastmcp/agent/admin_orchestration_agent.py`
+- `src/tag_fastmcp/agent/schema_intelligence_agent.py`
 - `src/tag_fastmcp/agent/stubs.py`
 
 That baseline currently provides:
@@ -168,6 +169,8 @@ That baseline currently provides:
 - a typed catalog for all five approved agent classes
 - selection rules keyed off `RequestContext` and `PolicyEnvelope`
 - a live bounded runtime for `admin_orchestration`
+- a live bounded runtime for `schema_intelligence` understanding-document generation
+- an interactive understanding-capture path that layers safe row previews and operator answers on top of schema intelligence output
 - registry exposure of implemented versus stub or gated agent runtime state for the remaining agent classes
 
 ## Phase 4 Routing and Orchestration
@@ -231,6 +234,7 @@ That baseline currently provides:
 - widget chat presentation attached to `WidgetChatResult`
 - opt-in rich widget stream events layered over the existing token/result/error contract
 - admin chat presentation attached to `AdminChatResult` and streamed over the HTTP adapter
+- admin HTTP bearer JWT auth mapped into the existing admin context and enforcement path, with development header fallback for local console use
 
 ## Phase 6 Approval and Agent Lifecycle
 
@@ -381,11 +385,11 @@ Loads environment-backed runtime settings.
 
 ### `core/domain_registry.py`
 
-Loads and validates the domain manifest. Provides report and workflow lookup.
+Loads and validates the per-app domain contract from inline app config or an optional manifest file. Provides report and workflow lookup.
 
 ### `core/capability_registry.py`
 
-Derives the typed plug-and-play registry snapshot for MCP servers, agents, apps, reports, workflows, external MCP tool registrations, channel formatter contracts, and tool capabilities from runtime settings plus manifest config.
+Derives the typed plug-and-play registry snapshot for MCP servers, agents, apps, reports, workflows, external MCP tool registrations, channel formatter contracts, and tool capabilities from runtime settings plus app config or optional manifest config.
 
 Near-term extension point:
 
@@ -470,7 +474,7 @@ Stores replay-safe responses keyed by a stable request fingerprint. Supports in-
 
 ### `core/workflow_engine.py`
 
-Runs small guided workflows using manifest-defined required fields and per-session state.
+Runs small guided workflows using configured required fields and per-session state.
 
 ### `core/response_builder.py`
 
@@ -487,13 +491,15 @@ Validates constrained builder graphs and previews them by calling FastMCP tools 
 Builds the combined ASGI service:
 
 - mounts the FastMCP HTTP app at `/mcp`
+- exposes `/apps` for frontend app discovery and picker state
 - exposes `/session/start` for the widget session bootstrap
 - exposes `/chat` as an NDJSON streaming endpoint compatible with the existing chatbot widget
+- exposes admin chat and lifecycle routes with bearer JWT auth at the transport boundary
 - keeps widget-specific transport behavior out of the internal core
 
 Near-term extension point:
 
-- map trusted auth and widget metadata into `RequestContext` before chat execution
+- map trusted widget auth and metadata into `RequestContext` before chat execution
 - emit richer formatter blocks and state events once the formatter layer is implemented
 
 ## Tool Layers
@@ -512,7 +518,7 @@ Validated query execution and last-query summaries.
 
 ### `tools/report_tools.py`
 
-Report execution based on manifest-defined SQL.
+Report execution based on configured SQL contracts.
 
 ### `tools/workflow_tools.py`
 

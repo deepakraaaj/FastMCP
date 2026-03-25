@@ -414,7 +414,7 @@ Audit rules:
 - `src/tag_fastmcp/tools/lifecycle_tools.py`
   - trusted admin lifecycle tool surface for review, decision, registration, activation, and resume
 - `src/tag_fastmcp/core/admin_service.py` and `src/tag_fastmcp/http_api.py`
-  - shared admin lifecycle HTTP transport with trusted `x-admin-context` scope derivation
+  - shared admin lifecycle HTTP transport with trusted bearer JWT scope derivation and development header fallback
 - `src/tag_fastmcp/core/agent_registry.py` and `src/tag_fastmcp/tools/system_tools.py`
   - active registrations now refresh into `describe_capabilities`; drafts and non-activated registrations remain hidden
 

@@ -34,6 +34,9 @@ Focus areas:
 - do not move orchestration, approvals, or cross-service observability into FastMCP unless the architecture explicitly changes
 - make new tool behavior discoverable through the capability registry before orchestration depends on it
 - reuse `core/admin_service.py`, `core/admin_chat_service.py`, `agent/admin_orchestration_agent.py`, and `tools/lifecycle_tools.py` for trusted admin lifecycle or chat operations instead of duplicating planning, approval, or registration logic in transport handlers
+- reuse `core/admin_auth.py` when changing trusted admin HTTP auth instead of re-deriving roles or scopes directly inside `http_api.py`
+- reuse `agent/schema_intelligence_agent.py` and `tools/schema_tools.py` for schema-pack or understanding-doc generation instead of embedding metadata synthesis in unrelated chat or HTTP handlers
+- reuse `core/understanding_capture.py` and `scripts/capture_understanding.py` for schema-plus-sample-row onboarding interviews instead of building one-off onboarding prompts
 
 ### `platform-boundaries`
 
@@ -84,6 +87,7 @@ Focus areas:
 
 - reuse the existing `core/agent_registry.py` catalog and selection rules before inventing new agent metadata paths
 - reuse `agent/admin_orchestration_agent.py` before inventing a second admin-chat runtime path
+- reuse `agent/schema_intelligence_agent.py` before creating a second schema-documentation path
 - agents do bounded reasoning, not policy enforcement
 - app chat stays single-app
 - admin orchestration stays privilege-based and explicit
@@ -248,7 +252,7 @@ Focus areas:
 
 Use when:
 
-- changing manifest structure
+- changing inline app-domain structure or manifest structure
 - adding reports
 - adding workflows
 - extending domain metadata
@@ -259,7 +263,7 @@ Focus areas:
 - domain rules should remain config-driven where possible
 - new reports and workflows should automatically appear through capability discovery
 - keep localhost-only demo credentials in ignored override files such as `apps.local.yaml`, not in the shared `apps.yaml`
-- document manifest changes
+- document domain-config or manifest changes
 - update examples and tests
 
 ### `docs-sync`

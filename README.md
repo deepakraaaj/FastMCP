@@ -14,7 +14,7 @@ A **domain-agnostic, multi-application** MCP runtime and seed layer for a broade
 │  Policy topology · Scenario mockups · Approval states           │
 ├─────────────────────────────────────────────────────────────────┤
 │  MCP Tool Layer  (FastMCP 3.x)                                  │
-│  execute_sql · discover_schema · invoke_capability              │
+│  execute_sql · discover_schema · generate_understanding_doc      │
 │  lifecycle review tools · agent_chat · workflows                │
 ├─────────────────────────────────────────────────────────────────┤
 │  Core Engine  (Domain-Agnostic)                                 │
@@ -30,7 +30,7 @@ A **domain-agnostic, multi-application** MCP runtime and seed layer for a broade
 
 ## Key Principles
 
-- **No application-specific code in the core.** All domain logic lives in YAML manifests under `domains/` and app config in `apps.yaml`.
+- **No application-specific code in the core.** Domain logic lives in app config and optional YAML manifests, not in Python branches.
 - **Multi-app by design.** A single server handles multiple applications via `app_id` routing.
 - **Async everywhere.** The query engine uses `sqlalchemy[asyncio]` for non-blocking DB access.
 - **FastMCP is the execution surface, not the whole platform.** Keep MCP handlers thin and use them to expose safe typed capabilities to the broader orchestration layer.
@@ -79,7 +79,7 @@ That registry is the starting contract for:
 The current onboarding baseline is:
 
 1. register an app in `apps.yaml`
-2. define reports and workflows in its manifest
+2. define `allowed_tables`, `protected_tables`, reports, and workflows inline in `apps.yaml` or point to an optional manifest file
 3. let the core capability registry derive the discoverable contract
 4. keep MCP tools thin and let orchestration consume registry metadata rather than hardcoded branches
 
@@ -107,6 +107,13 @@ The current reliability baseline for registered external MCP tools includes:
 - server-level circuit breaker state
 - exact fallback capability ids for deterministic degradation
 
+The schema-intelligence baseline now also supports:
+
+- direct `generate_understanding_doc` execution for one app scope
+- deterministic understanding documents built from approved schema and domain metadata
+- registry-visible schema-intelligence agent metadata for admin or direct-tool callers
+- an interactive onboarding script that previews sample rows and asks business questions before writing an understanding workbook
+
 ---
 
 ## Quick Start
@@ -124,6 +131,9 @@ cp .env.example .env
 # Optional: run the bundled demo apps instead of your primary config
 # TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml
 
+# Optional: point at the localhost starter config
+# TAG_FASTMCP_APPS_CONFIG_PATH=apps.local.yaml
+
 # Start the MCP server
 uv run tag-fastmcp
 ```
@@ -132,9 +142,12 @@ Server runs at `http://127.0.0.1:8001`.
 
 When `TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml`, startup now auto-seeds the bundled SQLite maintenance and dispatch demo databases so the widget and admin console have sample data immediately.
 
+For your own localhost databases, edit [`apps.local.yaml`](/home/user/Desktop/FastMCP/apps.local.yaml) and set `TAG_FASTMCP_APPS_CONFIG_PATH=apps.local.yaml` in `.env`.
+
 Available HTTP surfaces:
 
 - MCP transport: `http://127.0.0.1:8001/mcp`
+- App picker bootstrap: `GET http://127.0.0.1:8001/apps`
 - Widget session bootstrap: `POST http://127.0.0.1:8001/session/start`
 - Widget chat stream: `POST http://127.0.0.1:8001/chat?stream=false`
 - Admin chat stream: `POST http://127.0.0.1:8001/admin/chat?stream=false`
@@ -147,7 +160,7 @@ Available HTTP surfaces:
 - Admin registration activate: `POST http://127.0.0.1:8001/admin/agents/registrations/{registration_id}/activate`
 - Health probe: `GET http://127.0.0.1:8001/healthz`
 
-Admin HTTP routes currently expect a development-time `x-admin-context` header containing base64-encoded JSON for actor, role, scopes, and allowed apps. This is a transport placeholder until real auth integration lands. Admin chat now runs through the live bounded `admin_orchestration` runtime, while heavy cross-db execution and real auth are still later steps.
+Admin HTTP routes now accept `Authorization: Bearer <jwt>` and map trusted claims into the existing admin request-context and policy-enforcement path. In `development`, the live console can still fall back to the base64-encoded `x-admin-context` header for local walkthroughs; production should use bearer JWT auth. Admin chat now runs through the live bounded `admin_orchestration` runtime, while heavy cross-db execution and full IdP or JWKS integration are still later steps.
 
 ### 2. Architecture Console (UI)
 
@@ -157,13 +170,21 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:3000`. The UI now combines the Phase 7 architecture console with a live browser surface for widget chat, admin chat, approvals, proposals, and registration activation. The Vite dev server proxies `/session`, `/chat`, `/admin`, `/healthz`, and `/mcp` to the backend.
+Opens at `http://localhost:3000`. The default homepage is now a simpler app-scoped chatbot with an app dropdown backed by the widget chat API, while the repo still retains the richer live-console components for future admin or demo surfaces. The Vite dev server proxies `/apps`, `/session`, `/chat`, `/admin`, `/healthz`, and `/mcp` to the backend.
 
 ### 3. Run Tests
 
 ```bash
 uv run pytest
 ```
+
+### 4. Capture An Understanding Workbook
+
+```bash
+uv run python scripts/capture_understanding.py --app-id fits_dev_march_9
+```
+
+This script reads the configured app schema, collects safe sample rows from the summarized tables, asks you targeted business questions, and writes both YAML and Markdown workbook files under `understanding/`.
 
 ---
 
@@ -175,8 +196,20 @@ uv run pytest
 | `TAG_FASTMCP_CONTROL_PLANE_DATABASE_URL` | Async DB for approvals, proposal drafts, registrations, and lifecycle audit records; defaults to `TAG_FASTMCP_DATABASE_URL` when unset | unset |
 | `TAG_FASTMCP_APPS_CONFIG_PATH` | Path to the multi-app registry YAML | `apps.yaml` |
 | `TAG_FASTMCP_DEFAULT_CHAT_APP_ID` | Default app for widget chat when no `x-app-id` is supplied | unset |
-| `TAG_FASTMCP_LLM_BASE_URL` | vLLM-compatible API endpoint | `http://192.168.15.112:8000/v1` |
-| `TAG_FASTMCP_LLM_MODEL` | Model name for the agent | `default` |
+| `TAG_FASTMCP_ADMIN_AUTH_MODE` | `auto`, `jwt`, or `dev_header` for admin HTTP auth; `auto` uses `dev_header` in development and `jwt` otherwise | `auto` |
+| `TAG_FASTMCP_ADMIN_AUTH_JWT_SECRET` | Shared secret for admin bearer JWT verification | unset |
+| `TAG_FASTMCP_ADMIN_AUTH_JWT_PUBLIC_KEY` | PEM public key for admin bearer JWT verification | unset |
+| `TAG_FASTMCP_ADMIN_AUTH_JWT_ALGORITHMS` | Comma-separated JWT algorithms for admin bearer auth | `HS256` |
+| `TAG_FASTMCP_ADMIN_AUTH_JWT_ISSUER` | Optional issuer constraint for admin bearer JWT verification | unset |
+| `TAG_FASTMCP_ADMIN_AUTH_JWT_AUDIENCE` | Optional audience constraint for admin bearer JWT verification | unset |
+| `TAG_FASTMCP_ADMIN_AUTH_SUBJECT_CLAIM` | JWT claim name used for `auth_subject` | `sub` |
+| `TAG_FASTMCP_ADMIN_AUTH_ACTOR_ID_CLAIM` | JWT claim name used for the admin `actor_id` | `actor_id` |
+| `TAG_FASTMCP_ADMIN_AUTH_ROLE_CLAIM` | JWT claim name used for the trusted admin role | `role` |
+| `TAG_FASTMCP_ADMIN_AUTH_SCOPES_CLAIM` | JWT claim name used for admin auth scopes | `scope` |
+| `TAG_FASTMCP_ADMIN_AUTH_ALLOWED_APP_IDS_CLAIM` | JWT claim name used for explicit allowed app IDs | `allowed_app_ids` |
+| `TAG_FASTMCP_ADMIN_AUTH_TENANT_ID_CLAIM` | JWT claim name used for tenant scope | `tenant_id` |
+| `TAG_FASTMCP_LLM_BASE_URL` | OpenAI-compatible companion LLM gateway endpoint | `http://127.0.0.1:8000/v1` |
+| `TAG_FASTMCP_LLM_MODEL` | Model name sent to the companion LLM gateway | `Qwen-Opt-v1.5` |
 | `TAG_FASTMCP_HOST` | Server bind address | `127.0.0.1` |
 | `TAG_FASTMCP_PORT` | Server bind port | `8001` |
 | `TAG_FASTMCP_SESSION_STORE_BACKEND` | `memory` or `valkey` for session storage | `memory` |
@@ -196,6 +229,7 @@ uv run pytest
 │   ├── http_api.py                # Widget/admin HTTP adapters + mounted /mcp server
 │   ├── settings.py                # Environment-backed settings
 │   ├── core/
+│   │   ├── admin_auth.py         # Admin HTTP bearer auth and trusted claim mapping
 │   │   ├── app_router.py          # Multi-app context resolver
 │   │   ├── agent_registry.py      # Bounded agent catalog and selection rules
 │   │   ├── agent_lifecycle_service.py # Proposal draft, registration, and activation lifecycle
@@ -222,10 +256,11 @@ uv run pytest
 │   │   ├── response_builder.py    # Typed response envelopes
 │   │   ├── visibility_policy.py   # Role-aware visibility derivation
 │   │   ├── workflow_engine.py     # Guided workflow state
-│   │   └── domain_registry.py     # Manifest loading
+│   │   └── domain_registry.py     # Inline/manifest domain loading
 │   ├── agent/
 │   │   ├── admin_orchestration_agent.py # Live bounded admin orchestration runtime
 │   │   ├── clarification_agent.py # vLLM-powered clarification
+│   │   ├── schema_intelligence_agent.py # Deterministic schema understanding-doc runtime
 │   │   ├── stubs.py               # Phase 3 stub agents for later runtimes
 │   │   └── prompts.py             # System prompts for agent
 │   ├── models/
@@ -237,7 +272,7 @@ uv run pytest
 │       ├── query_tools.py         # execute_sql, summarize
 │       ├── routing_tools.py       # invoke_capability
 │       ├── lifecycle_tools.py     # approval review, registration, activation, resume
-│       ├── schema_tools.py        # discover_schema
+│       ├── schema_tools.py        # discover_schema, generate_understanding_doc
 │       ├── agent_tools.py         # agent_chat
 │       ├── report_tools.py        # run_report
 │       ├── workflow_tools.py      # start/continue workflow
@@ -252,7 +287,7 @@ uv run pytest
 │   │       └── SystemNode.jsx     # Topology node component
 │   ├── package.json
 │   └── vite.config.js
-├── domains/                       # Domain manifests (YAML)
+├── domains/                       # Optional domain manifests (YAML)
 ├── apps.yaml                      # Multi-app registry
 ├── tests/
 ├── docs/
@@ -263,16 +298,36 @@ uv run pytest
 
 ## Adding a New Application
 
-1. Add a DB connection and manifest path to `apps.yaml`:
+1. Add a DB connection and inline guardrails to `apps.yaml`:
    ```yaml
    apps:
      my_app:
        display_name: "My Application"
        database_url: "mysql+aiomysql://user:pass@host:3306/mydb"
-       domain_manifest_path: "domains/my_app.yaml"
+       description: "App-scoped database contract."
+       allow_mutations: true
+       require_select_where: true
+       allowed_tables:
+         - orders
+         - customers
+       protected_tables:
+         - schema_migrations
+       reports:
+         recent_orders:
+           description: "Show recent orders."
+           sql: >
+             SELECT id, customer_id, status
+             FROM orders
+             WHERE created_at >= CURRENT_DATE - INTERVAL 7 DAY
+       workflows:
+         create_order:
+           description: "Collect the minimum fields for order creation."
+           required_fields:
+             - customer_id
+             - order_total
    ```
 
-2. Create a domain manifest at `domains/my_app.yaml` with your reports and workflows.
+2. Optional: instead of inline domain config, point `manifest` at a YAML file under `domains/` if you want to keep per-app contracts in separate files.
 
 3. Optionally register external MCP servers and channel formatter contracts:
    ```yaml

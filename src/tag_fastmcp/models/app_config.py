@@ -53,10 +53,28 @@ class ChannelConfig(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class InlineReportConfig(BaseModel):
+    description: str
+    sql: str
+
+
+class InlineWorkflowConfig(BaseModel):
+    description: str
+    required_fields: list[str] = Field(default_factory=list)
+
+
 class AppConfig(BaseModel):
     display_name: str
     database_url: str
-    manifest: str
+    manifest: str | None = None
+    name: str | None = None
+    description: str | None = None
+    allow_mutations: bool | None = None
+    require_select_where: bool | None = None
+    allowed_tables: list[str] = Field(default_factory=list)
+    protected_tables: list[str] = Field(default_factory=list)
+    reports: dict[str, InlineReportConfig] = Field(default_factory=dict)
+    workflows: dict[str, InlineWorkflowConfig] = Field(default_factory=dict)
 
 
 class AppsRegistry(BaseModel):

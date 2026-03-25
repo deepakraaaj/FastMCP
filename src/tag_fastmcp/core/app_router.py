@@ -43,12 +43,24 @@ class AppRouter:
                 raise KeyError(f"Unknown application ID: {app_id}")
 
             config = self.registry.apps[app_id]
-            domain_registry = DomainRegistry(Path(config.manifest))
+            domain_registry = DomainRegistry.from_app_config(
+                app_id,
+                config,
+                root_path=self.settings.root_path,
+            )
             sql_policy = SQLPolicyValidator(
                 allowed_tables=domain_registry.allowed_tables(),
                 protected_tables=domain_registry.protected_tables(),
-                allow_mutations=self.settings.allow_mutations,
-                require_select_where=self.settings.require_select_where,
+                allow_mutations=(
+                    config.allow_mutations
+                    if config.allow_mutations is not None
+                    else self.settings.allow_mutations
+                ),
+                require_select_where=(
+                    config.require_select_where
+                    if config.require_select_where is not None
+                    else self.settings.require_select_where
+                ),
             )
             query_engine = AsyncQueryEngine(
                 database_url=config.database_url,

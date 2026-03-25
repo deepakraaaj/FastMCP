@@ -20,6 +20,7 @@ The baseline Phase 3 implementation now exists in the runtime:
 
 - `src/tag_fastmcp/core/agent_registry.py`
 - `src/tag_fastmcp/agent/admin_orchestration_agent.py`
+- `src/tag_fastmcp/agent/schema_intelligence_agent.py`
 - `src/tag_fastmcp/agent/stubs.py`
 
 That baseline currently provides:
@@ -28,7 +29,7 @@ That baseline currently provides:
 - selection rules driven by `RequestContext` and `PolicyEnvelope`
 - registry metadata that distinguishes active, stub, and gated agent runtime states
 
-The app-scoped clarification agent and the admin orchestration agent are concretely executable today. The schema, heavy, and proposal agents remain bounded stubs or gated later-phase runtimes.
+The app-scoped clarification agent, the admin orchestration agent, and the schema intelligence agent are concretely executable today. The heavy and proposal agents remain bounded stubs or gated later-phase runtimes.
 
 ## Core Rule
 
@@ -52,6 +53,7 @@ Agents reason inside those boundaries. They do not widen them.
 
 - one app-scoped clarification agent over schema and manifest context
 - one bounded admin orchestration runtime over the planner, formatter, and approval services
+- one bounded schema intelligence runtime for understanding-doc generation over approved schema and manifest context
 - schema discovery as a reusable core primitive
 - manifest-backed reports and workflows
 - registry-driven capability execution
@@ -60,9 +62,8 @@ Agents reason inside those boundaries. They do not widen them.
 ### Not yet present
 
 - heavy cross-db execution agent
-- schema-pack generation agent
 - agent proposal and approval workflow
-- agent registry metadata and runtime beyond the active app/admin agents
+- agent registry metadata and runtime beyond the active app/admin/schema agents
 
 ## Agent Topology
 

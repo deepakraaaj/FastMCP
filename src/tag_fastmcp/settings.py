@@ -4,7 +4,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,9 +46,28 @@ class AppSettings(BaseSettings):
     control_plane_database_url: str | None = None
     apps_config_path: Path = PROJECT_ROOT / "apps.yaml"
     default_chat_app_id: str | None = None
-    llm_base_url: str = "http://192.168.15.112:8000/v1"
-    llm_model: str = "default"
+    admin_auth_mode: Literal["auto", "jwt", "dev_header"] = "auto"
+    admin_auth_jwt_secret: str | None = None
+    admin_auth_jwt_public_key: str | None = None
+    admin_auth_jwt_algorithms: list[str] = Field(default_factory=lambda: ["HS256"])
+    admin_auth_jwt_issuer: str | None = None
+    admin_auth_jwt_audience: str | None = None
+    admin_auth_subject_claim: str = "sub"
+    admin_auth_actor_id_claim: str = "actor_id"
+    admin_auth_role_claim: str = "role"
+    admin_auth_scopes_claim: str = "scope"
+    admin_auth_allowed_app_ids_claim: str = "allowed_app_ids"
+    admin_auth_tenant_id_claim: str = "tenant_id"
+    llm_base_url: str = "http://127.0.0.1:8000/v1"
+    llm_model: str = "Qwen-Opt-v1.5"
     root_path: Path = PROJECT_ROOT
+
+    @field_validator("admin_auth_jwt_algorithms", mode="before")
+    @classmethod
+    def _normalize_admin_auth_jwt_algorithms(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 @lru_cache(maxsize=1)

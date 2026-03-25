@@ -20,7 +20,7 @@ uv run python scripts/demo_fits_bot.py
 
 Current assumption for the localhost demo:
 
-- `apps.local.yaml` exists in the repository root and is used automatically by the demo script if present
+- `apps.local.yaml` is used automatically only when it contains the `remp_local` app entry
 - the local override points at a real localhost MySQL database
 - the current demo app is `remp_local` backed by the `remp-chat-bot` database
 - the tracked manifest for this demo is `domains/remp_local.yaml`
@@ -60,7 +60,7 @@ If the localhost database is temporarily unreachable:
 - say the architecture and flow remain valid
 - mention the demo depends on the local MySQL service and valid localhost credentials
 - mention the demo now exits cleanly after the configured timeout instead of hanging
-- if MySQL rejects the login, update `apps.local.yaml` with a valid localhost user or fix the grant
+- if MySQL rejects the login, add or restore the `remp_local` entry in `apps.local.yaml` with a valid localhost user or fix the grant
 - fall back to the local test-backed workflow and report examples already in the repository
 
 ## Expected Outcome

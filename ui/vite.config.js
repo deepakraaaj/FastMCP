@@ -14,6 +14,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,
       },
+      '/apps': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
       '/chat': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,

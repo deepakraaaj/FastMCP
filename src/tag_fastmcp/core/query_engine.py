@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import text
@@ -10,6 +11,8 @@ from tag_fastmcp.models.contracts import PolicyDecision, ReportResultPayload, SQ
 
 
 class AsyncQueryEngine:
+    _safe_identifier_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
     def __init__(self, database_url: str, default_row_limit: int) -> None:
         self.database_url = normalize_database_url(database_url)
         self.default_row_limit = default_row_limit
@@ -52,6 +55,15 @@ class AsyncQueryEngine:
             row_count=len(rows),
             rows_preview=rows,
         )
+
+    async def sample_rows(self, table_name: str, limit: int = 5) -> list[dict[str, Any]]:
+        if not self._safe_identifier_pattern.match(table_name):
+            raise ValueError(f"Unsafe table name '{table_name}' for sample preview.")
+
+        safe_limit = max(1, min(int(limit), self.default_row_limit))
+        async with self._engine.connect() as conn:
+            result = await conn.execute(text(f"SELECT * FROM {table_name} LIMIT {safe_limit}"))
+            return [dict(row._mapping) for row in result.fetchall()]
 
     async def close(self) -> None:
         await self._engine.dispose()

@@ -122,3 +122,41 @@ async def test_agent_registry_rejects_forbidden_agent_kind_in_app_mode(app_setti
         assert "not available" in str(exc)
     else:
         raise AssertionError("Expected forbidden heavy agent selection to be rejected.")
+
+
+async def test_agent_registry_allows_schema_intelligence_for_direct_tool_service_role(
+    app_settings,
+) -> None:
+    container = build_container(app_settings)
+    request_context = await container.request_contexts.build(
+        execution_mode="direct_tool",
+        origin="mcp_tool",
+        requested_app_id="maintenance",
+        actor_id="service-worker",
+        role="service",
+    )
+    policy_envelope = container.policy_envelopes.derive(
+        request_context,
+        allow_platform_tools=True,
+    )
+
+    selection = container.agent_registry.select_agent(
+        request_context,
+        policy_envelope,
+        preferred_agent_kind="schema_intelligence",
+    )
+
+    assert selection.agent_kind == "schema_intelligence"
+    assert selection.runtime_state == "active"
+
+
+def test_capability_registry_exposes_understanding_doc_tool_and_schema_agent(app_settings) -> None:
+    container = build_container(app_settings)
+    registry = container.capability_registry.describe(app_id="maintenance")
+
+    capability_ids = {item.capability_id for item in registry.capabilities}
+    agents = {item.agent_id: item for item in registry.agents}
+
+    assert "tool.generate_understanding_doc" in capability_ids
+    assert agents["agent.schema_intelligence"].runtime_state == "active"
+    assert "tool.generate_understanding_doc" in agents["agent.schema_intelligence"].capability_ids

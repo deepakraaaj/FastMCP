@@ -19,6 +19,7 @@ async def test_describe_capabilities_returns_registry_snapshot(test_app) -> None
     capability_ids = {item["capability_id"] for item in registry["capabilities"]}
     assert "tool.execute_sql" in capability_ids
     assert "tool.describe_capabilities" in capability_ids
+    assert "tool.generate_understanding_doc" in capability_ids
     assert "report.maintenance.overdue_tasks" in capability_ids
     assert "workflow.maintenance.create_task" in capability_ids
     assert "tool.github.search_issues" in capability_ids
@@ -32,6 +33,8 @@ async def test_describe_capabilities_returns_registry_snapshot(test_app) -> None
     assert "agent.app_scoped_chat" in agents
     assert agents["agent.app_scoped_chat"]["runtime_state"] == "active"
     assert agents["agent.admin_orchestration"]["runtime_state"] == "active"
+    assert agents["agent.schema_intelligence"]["runtime_state"] == "active"
+    assert "tool.generate_understanding_doc" in agents["agent.schema_intelligence"]["capability_ids"]
     assert agents["agent.heavy_cross_db"]["requires_envelope_flag"] == "allow_heavy_agent"
 
     channels = {item["channel_id"]: item for item in registry["channels"]}

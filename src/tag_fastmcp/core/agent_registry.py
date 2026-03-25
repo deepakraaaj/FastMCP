@@ -59,13 +59,13 @@ AGENT_SPECS: tuple[_AgentSpec, ...] = (
         agent_id="agent.schema_intelligence",
         agent_kind="schema_intelligence",
         display_name="Schema Intelligence Agent",
-        description="Schema-pack and metadata generation scaffold over approved schema discovery output.",
-        provider="phase-stub",
+        description="Schema-pack and understanding-document generation runtime over approved schema discovery output.",
+        provider="core-runtime",
         model_name=None,
         default_execution_modes=("admin_chat", "direct_tool"),
         requires_admin=True,
-        runtime_state="stub",
-        capability_ids=("tool.discover_schema",),
+        runtime_state="active",
+        capability_ids=("tool.discover_schema", "tool.generate_understanding_doc"),
     ),
     _AgentSpec(
         agent_id="agent.heavy_cross_db",
@@ -303,7 +303,7 @@ class AgentRegistry:
     ) -> bool:
         if request_context.execution_mode not in definition.default_execution_modes:
             return False
-        if definition.requires_admin and request_context.role not in {"app_admin", "platform_admin"}:
+        if definition.requires_admin and request_context.role not in {"app_admin", "platform_admin", "service"}:
             return False
         if definition.requires_envelope_flag and not self._envelope_flag(policy_envelope, definition.requires_envelope_flag):
             return False

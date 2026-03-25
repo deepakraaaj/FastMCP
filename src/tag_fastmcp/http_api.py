@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -15,6 +16,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 
 from tag_fastmcp.app import create_app
+from tag_fastmcp.core.admin_auth import AdminAuthService
 from tag_fastmcp.core.container import AppContainer, build_container, get_container
 from tag_fastmcp.models.contracts import (
     ActivateRegistrationRequest,
@@ -35,6 +37,8 @@ from tag_fastmcp.models.http_api import (
     AdminRegistrationListParams,
     AdminResumeExecutionBody,
     AdminUserContext,
+    WidgetAppListResponse,
+    WidgetAppOption,
     WidgetChatRequest,
     WidgetSessionStartResponse,
     WidgetStreamEvent,
@@ -44,22 +48,15 @@ from tag_fastmcp.models.http_api import (
 from tag_fastmcp.settings import AppSettings, get_settings
 
 
+logger = logging.getLogger("tag_fastmcp")
+
+
 def _decode_user_context(raw_value: str | None) -> WidgetUserContext | None:
     if not raw_value:
         return None
     try:
         decoded = base64.b64decode(raw_value).decode("utf-8")
         return WidgetUserContext.model_validate_json(decoded)
-    except Exception:
-        return None
-
-
-def _decode_admin_context(raw_value: str | None) -> AdminUserContext | None:
-    if not raw_value:
-        return None
-    try:
-        decoded = base64.b64decode(raw_value).decode("utf-8")
-        return AdminUserContext.model_validate_json(decoded)
     except Exception:
         return None
 
@@ -80,6 +77,14 @@ def _text_chunks(message: str, size: int = 80) -> list[str]:
 
 def _json_line(event: BaseModel) -> bytes:
     return (event.model_dump_json() + "\n").encode("utf-8")
+
+
+def _stream_error_message(exc: Exception, *, settings: AppSettings) -> str:
+    if settings.environment == "development":
+        detail = str(exc).strip()
+        if detail:
+            return detail
+    return "A temporary system issue occurred. Please try again."
 
 
 async def _json_body(request: Request) -> dict[str, Any]:
@@ -114,20 +119,13 @@ def _admin_request_fields(
         "metadata": metadata,
     }
 
-
-def _admin_context_or_error(request: Request) -> AdminUserContext:
-    admin_context = _decode_admin_context(request.headers.get("x-admin-context"))
-    if admin_context is None:
-        raise PermissionError("Valid x-admin-context header is required for admin routes.")
-    return admin_context
-
-
 def create_http_app(
     settings: AppSettings | None = None,
     container: AppContainer | None = None,
 ) -> Starlette:
     resolved_settings = settings or get_settings()
     resolved_container = container or build_container(resolved_settings)
+    admin_auth = AdminAuthService(settings=resolved_settings)
     mcp_app = create_app(settings=resolved_settings, container=resolved_container).http_app(
         path=resolved_settings.path,
         transport=resolved_settings.transport,
@@ -159,6 +157,25 @@ def create_http_app(
 
     async def health(_: Request) -> Response:
         return JSONResponse({"status": "ok", "service": resolved_settings.app_name})
+
+    async def list_apps(_: Request) -> Response:
+        apps: list[WidgetAppOption] = []
+        for app_id, config in sorted(resolved_container.app_router.registry.apps.items()):
+            domain_registry = resolved_container.app_router.resolve(app_id).domain_registry
+            apps.append(
+                WidgetAppOption(
+                    app_id=app_id,
+                    display_name=config.display_name,
+                    description=domain_registry.manifest.description,
+                    domain_name=domain_registry.manifest.name,
+                    allowed_tables=list(domain_registry.manifest.allowed_tables),
+                )
+            )
+        payload = WidgetAppListResponse(
+            apps=apps,
+            default_app_id=resolved_settings.default_chat_app_id or (apps[0].app_id if apps else None),
+        )
+        return JSONResponse(payload.model_dump(mode="json"))
 
     async def start_session(request: Request) -> Response:
         user_context = _decode_user_context(request.headers.get("x-user-context"))
@@ -244,11 +261,12 @@ def create_http_app(
                 yield (json.dumps(result_event) + "\n").encode("utf-8")
             except ValueError as exc:
                 yield _json_line(WidgetStreamEvent(type="error", message=str(exc)))
-            except Exception:
+            except Exception as exc:
+                logger.exception("Widget chat stream failed.")
                 yield _json_line(
                     WidgetStreamEvent(
                         type="error",
-                        message="A temporary system issue occurred. Please try again.",
+                        message=_stream_error_message(exc, settings=resolved_settings),
                     )
                 )
 
@@ -259,7 +277,10 @@ def create_http_app(
 
     async def admin_list_approvals(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             params = AdminApprovalQueueParams.model_validate(dict(request.query_params))
             response = await resolved_container.admin_service.list_approval_queue(
                 ApprovalQueueRequest(
@@ -283,7 +304,10 @@ def create_http_app(
 
     async def admin_decide_approval(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             body = AdminApprovalDecisionBody.model_validate(await _json_body(request))
             response = await resolved_container.admin_service.decide_approval(
                 ApprovalDecisionRequest(
@@ -308,7 +332,10 @@ def create_http_app(
 
     async def admin_resume_approval(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             body = AdminResumeExecutionBody.model_validate(await _json_body(request))
             response = await resolved_container.admin_service.resume_approved_execution(
                 ResumeExecutionRequest(
@@ -331,7 +358,10 @@ def create_http_app(
 
     async def admin_list_proposals(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             params = AdminProposalListParams.model_validate(dict(request.query_params))
             response = await resolved_container.admin_service.list_agent_proposals(
                 ProposalListRequest(
@@ -354,7 +384,10 @@ def create_http_app(
 
     async def admin_list_registrations(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             params = AdminRegistrationListParams.model_validate(dict(request.query_params))
             response = await resolved_container.admin_service.list_agent_registrations(
                 RegistrationListRequest(
@@ -378,7 +411,10 @@ def create_http_app(
 
     async def admin_register_proposal(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             body = AdminRegisterProposalBody.model_validate(await _json_body(request))
             response = await resolved_container.admin_service.register_agent_proposal(
                 RegisterProposalRequest(
@@ -402,7 +438,10 @@ def create_http_app(
 
     async def admin_activate_registration(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
             body = AdminActivateRegistrationBody.model_validate(await _json_body(request))
             response = await resolved_container.admin_service.activate_agent_registration(
                 ActivateRegistrationRequest(
@@ -425,7 +464,10 @@ def create_http_app(
 
     async def admin_chat(request: Request) -> Response:
         try:
-            admin_context = _admin_context_or_error(request)
+            admin_context = admin_auth.resolve_request(
+                authorization=request.headers.get("authorization"),
+                dev_context_header=request.headers.get("x-admin-context"),
+            )
         except PermissionError as exc:
             return JSONResponse({"error": str(exc)}, status_code=401)
 
@@ -498,11 +540,12 @@ def create_http_app(
                 yield (json.dumps(result_event) + "\n").encode("utf-8")
             except ValueError as exc:
                 yield _json_line(WidgetStreamEvent(type="error", message=str(exc)))
-            except Exception:
+            except Exception as exc:
+                logger.exception("Admin chat stream failed.")
                 yield _json_line(
                     WidgetStreamEvent(
                         type="error",
-                        message="A temporary system issue occurred. Please try again.",
+                        message=_stream_error_message(exc, settings=resolved_settings),
                     )
                 )
 
@@ -523,6 +566,7 @@ def create_http_app(
         ],
         routes=[
             Route("/healthz", health, methods=["GET"]),
+            Route("/apps", list_apps, methods=["GET"]),
             Route("/session/start", start_session, methods=["POST"]),
             Route("/chat", chat, methods=["POST"]),
             Route("/admin/approvals", admin_list_approvals, methods=["GET"]),

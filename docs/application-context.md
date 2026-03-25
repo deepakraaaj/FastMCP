@@ -68,7 +68,7 @@ The larger platform around this repo should own:
 ### Registry path
 
 - app registry load
-- domain manifest load
+- domain config or manifest load
 - external MCP server config load
 - channel formatter config load
 - capability snapshot derivation
@@ -113,8 +113,17 @@ The larger platform around this repo should own:
 - execute approved tool sequence through FastMCP client calls
 - collect preview steps and validation issues
 
+### Understanding capture path
+
+- resolve one configured app context
+- generate the base schema intelligence document inside the existing guardrails
+- collect bounded sample rows from the allowed tables only
+- ask targeted business questions for app purpose, write rules, table meaning, and status semantics
+- write YAML and Markdown workbook artifacts for later onboarding and chat-context improvement
+
 ### Widget HTTP adapter path
 
+- list configured app scopes for the frontend app picker
 - decode widget user context from headers
 - resolve widget app_id from `x-app-id` or default settings
 - start or reuse a session in the shared session store
@@ -126,7 +135,7 @@ The larger platform around this repo should own:
 
 ### Admin HTTP adapter path
 
-- decode trusted admin context from `x-admin-context`
+- decode trusted admin context from bearer JWT claims, with a development-only `x-admin-context` fallback
 - derive `admin_chat` request context and policy envelope before any lifecycle or chat action
 - auto-start or reuse an admin chat session in the shared session store
 - plan bounded admin-chat execution inside the existing orchestration service
@@ -141,10 +150,13 @@ The larger platform around this repo should own:
 
 - explicit runtime ownership boundaries
 - typed capability registry for plug-and-play discovery
+- config-only app onboarding through `apps.yaml` with optional manifest fallback
 - typed request and response contracts
 - request-context and policy-envelope enforcement services in the internal core
 - bounded agent catalog and agent-selection scaffolding in the internal core
 - active admin orchestration runtime in the internal core
+- active schema intelligence runtime for app understanding-document generation
+- interactive understanding-workbook capture over schema summaries and safe row previews
 - deterministic intent planner, plan compiler, and orchestration service in the internal core
 - role-aware visibility policy and formatter services in the internal core
 - durable control-plane baseline for approvals, proposal drafts, registrations, paused execution, and lifecycle audit events
@@ -157,6 +169,7 @@ The larger platform around this repo should own:
 - compatibility HTTP adapter for the existing chatbot widget
 - shared admin lifecycle HTTP adapter for dashboard or console integrations
 - shared admin chat HTTP adapter layered over the planner, formatter, and lifecycle core
+- admin bearer JWT auth baseline for trusted admin HTTP context derivation
 - live browser console over widget chat, admin chat, approvals, proposals, and registration activation
 - optional demo multi-app bootstrap through `apps.demo.yaml` with auto-seeded SQLite maintenance and dispatch datasets
 - bootstrapped development database
@@ -164,10 +177,10 @@ The larger platform around this repo should own:
 
 ## Current Gaps
 
-- no auth provider yet
+- no end-user auth provider yet
 - no NL-to-SQL planner yet
-- schema, heavy, and proposal agent runtimes are still stubbed or gated
-- no production-grade auth-backed admin dashboard yet; the current live console still uses the development `x-admin-context` header
+- heavy and proposal agent runtimes are still stubbed or gated
+- no production-grade auth-backed admin dashboard yet; the current live console still defaults to the development `x-admin-context` path unless a bearer token is supplied
 - formatter coverage is still concentrated in widget chat and registry routing, not every direct tool or future admin surface
 - single-domain sample only
 
@@ -286,7 +299,7 @@ The current runtime now includes the baseline Phase 6 implementation:
 - widget chat and `invoke_capability` now pause at approval boundaries instead of executing immediately
 - proposal outcomes now create draft records plus separate lifecycle approvals before any registration or activation step
 - trusted admin MCP tools now expose approval queue review, decision, proposal listing, registration, activation, and execution resume
-- trusted admin HTTP routes now expose the same review, decision, registration, activation, and resume actions via `x-admin-context`
+- trusted admin HTTP routes now expose the same review, decision, registration, activation, and resume actions via bearer JWT auth, with development header fallback
 - activated registrations now refresh back into `describe_capabilities` as dynamic active agents
 
 ## Phase 7 Visual Artifacts

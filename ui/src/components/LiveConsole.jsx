@@ -25,6 +25,7 @@ const DEFAULT_ADMIN_FORM = {
   tenantId: 'northfield',
   allowedAppIds: 'fits',
   authScopes: 'apps:*',
+  adminToken: '',
   appId: '',
   channelId: 'web_chat',
   message: 'Show overdue maintenance tasks for Plant Alpha and summarize the backlog.',
@@ -277,16 +278,26 @@ export default function LiveConsole() {
   );
 
   const adminHeaders = useMemo(
-    () => ({
-      'content-type': 'application/json',
-      'x-admin-context': encodeContext({
+    () => {
+      const headers = {
+        'content-type': 'application/json',
+      };
+      const adminToken = adminForm.adminToken.trim();
+      if (adminToken) {
+        headers.authorization = adminToken.toLowerCase().startsWith('bearer ')
+          ? adminToken
+          : `Bearer ${adminToken}`;
+        return headers;
+      }
+      headers['x-admin-context'] = encodeContext({
         actor_id: adminForm.actorId,
         tenant_id: adminForm.tenantId || null,
         role: adminForm.role,
         auth_scopes: splitCsv(adminForm.authScopes),
         allowed_app_ids: splitCsv(adminForm.allowedAppIds),
-      }),
-    }),
+      });
+      return headers;
+    },
     [adminForm],
   );
 
@@ -647,6 +658,14 @@ export default function LiveConsole() {
             <label>
               Channel ID
               <input value={adminForm.channelId} onChange={(event) => updateAdminForm('channelId', event.target.value)} />
+            </label>
+            <label className="form-field--full">
+              Admin bearer token
+              <input
+                value={adminForm.adminToken}
+                onChange={(event) => updateAdminForm('adminToken', event.target.value)}
+                placeholder="Optional. Leave empty to use development x-admin-context."
+              />
             </label>
             <label className="form-field--full">
               Allowed app IDs
