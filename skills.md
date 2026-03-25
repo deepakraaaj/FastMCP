@@ -2,6 +2,8 @@
 
 This file is not a framework-level skill registry. It is the project-local skill guide for future AI contributors.
 
+The default shipped product path is the `simple` runtime profile: app-scoped chat, schema understanding, onboarding capture, workflows, and guarded DB execution. That simple path now includes a fallback chat planner for safe generated reads and confirmation-gated writes. Treat admin, lifecycle, builder, and external-routing work as deferred `platform` behavior unless the task explicitly opts into it.
+
 ## Read First
 
 Before using any skill below, read:

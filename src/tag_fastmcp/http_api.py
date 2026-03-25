@@ -16,7 +16,6 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 
 from tag_fastmcp.app import create_app
-from tag_fastmcp.core.admin_auth import AdminAuthService
 from tag_fastmcp.core.container import AppContainer, build_container, get_container
 from tag_fastmcp.models.contracts import (
     ActivateRegistrationRequest,
@@ -125,7 +124,12 @@ def create_http_app(
 ) -> Starlette:
     resolved_settings = settings or get_settings()
     resolved_container = container or build_container(resolved_settings)
-    admin_auth = AdminAuthService(settings=resolved_settings)
+    enable_platform_features = resolved_settings.enable_platform_features
+    admin_auth = None
+    if enable_platform_features:
+        from tag_fastmcp.core.admin_auth import AdminAuthService
+
+        admin_auth = AdminAuthService(settings=resolved_settings)
     mcp_app = create_app(settings=resolved_settings, container=resolved_container).http_app(
         path=resolved_settings.path,
         transport=resolved_settings.transport,
@@ -135,21 +139,21 @@ def create_http_app(
 
     @asynccontextmanager
     async def lifespan(_: Starlette):
-        # Auto-seed demo databases on startup
-        try:
-            from scripts.seed_demo import seed_all as _seed_demo
-            await _seed_demo()
-        except Exception:
-            import sys, importlib, pathlib
-            seed_path = pathlib.Path(__file__).resolve().parents[2] / "scripts"
-            if str(seed_path) not in sys.path:
-                sys.path.insert(0, str(seed_path))
+        if resolved_settings.enable_demo_seed:
             try:
-                seed_mod = importlib.import_module("seed_demo")
-                await seed_mod.seed_all()
-            except Exception as seed_err:
-                import logging
-                logging.getLogger("tag_fastmcp").warning("Demo seed skipped: %s", seed_err)
+                from scripts.seed_demo import seed_all as _seed_demo
+                await _seed_demo()
+            except Exception:
+                import sys, importlib, pathlib
+                seed_path = pathlib.Path(__file__).resolve().parents[2] / "scripts"
+                if str(seed_path) not in sys.path:
+                    sys.path.insert(0, str(seed_path))
+                try:
+                    seed_mod = importlib.import_module("seed_demo")
+                    await seed_mod.seed_all()
+                except Exception as seed_err:
+                    import logging
+                    logging.getLogger("tag_fastmcp").warning("Demo seed skipped: %s", seed_err)
         try:
             yield
         finally:
@@ -554,6 +558,27 @@ def create_http_app(
             media_type="application/x-ndjson",
         )
 
+    routes: list[Route | Mount] = [
+        Route("/healthz", health, methods=["GET"]),
+        Route("/apps", list_apps, methods=["GET"]),
+        Route("/session/start", start_session, methods=["POST"]),
+        Route("/chat", chat, methods=["POST"]),
+    ]
+    if enable_platform_features:
+        routes.extend(
+            [
+                Route("/admin/approvals", admin_list_approvals, methods=["GET"]),
+                Route("/admin/approvals/{approval_id:str}/decision", admin_decide_approval, methods=["POST"]),
+                Route("/admin/approvals/{approval_id:str}/resume", admin_resume_approval, methods=["POST"]),
+                Route("/admin/agents/proposals", admin_list_proposals, methods=["GET"]),
+                Route("/admin/agents/registrations", admin_list_registrations, methods=["GET"]),
+                Route("/admin/agents/proposals/{proposal_id:str}/register", admin_register_proposal, methods=["POST"]),
+                Route("/admin/agents/registrations/{registration_id:str}/activate", admin_activate_registration, methods=["POST"]),
+                Route("/admin/chat", admin_chat, methods=["POST"]),
+            ]
+        )
+    routes.append(Mount("/", app=mcp_app))
+
     return Starlette(
         debug=resolved_settings.environment == "development",
         middleware=[
@@ -564,21 +589,7 @@ def create_http_app(
                 allow_headers=["*"],
             )
         ],
-        routes=[
-            Route("/healthz", health, methods=["GET"]),
-            Route("/apps", list_apps, methods=["GET"]),
-            Route("/session/start", start_session, methods=["POST"]),
-            Route("/chat", chat, methods=["POST"]),
-            Route("/admin/approvals", admin_list_approvals, methods=["GET"]),
-            Route("/admin/approvals/{approval_id:str}/decision", admin_decide_approval, methods=["POST"]),
-            Route("/admin/approvals/{approval_id:str}/resume", admin_resume_approval, methods=["POST"]),
-            Route("/admin/agents/proposals", admin_list_proposals, methods=["GET"]),
-            Route("/admin/agents/registrations", admin_list_registrations, methods=["GET"]),
-            Route("/admin/agents/proposals/{proposal_id:str}/register", admin_register_proposal, methods=["POST"]),
-            Route("/admin/agents/registrations/{registration_id:str}/activate", admin_activate_registration, methods=["POST"]),
-            Route("/admin/chat", admin_chat, methods=["POST"]),
-            Mount("/", app=mcp_app),
-        ],
+        routes=routes,
         lifespan=lifespan,
     )
 

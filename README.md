@@ -4,6 +4,8 @@ A **domain-agnostic, multi-application** MCP runtime and seed layer for a broade
 
 > Built on [FastMCP](https://gofastmcp.com) · Self-hosted vLLM agent layer · React Flow visual canvas
 
+The default runtime profile is now `simple`: app-scoped chat, schema understanding, workflows, and guarded database execution. The fallback chat path can now generate safe app-scoped `SELECT` statements automatically and stage `INSERT` / `UPDATE` statements behind explicit user confirmation. The older admin, lifecycle, builder, and external-routing surfaces are still available only when `TAG_FASTMCP_RUNTIME_PROFILE=platform`.
+
 ---
 
 ## Architecture
@@ -127,9 +129,11 @@ uv sync
 # Configure your environment
 cp .env.example .env
 # Edit `.env` with your apps config, database, LLM, and optional Valkey settings
+# Keep TAG_FASTMCP_RUNTIME_PROFILE=simple unless you explicitly need the deferred platform surfaces
 
 # Optional: run the bundled demo apps instead of your primary config
 # TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml
+# TAG_FASTMCP_ENABLE_DEMO_SEED=true
 
 # Optional: point at the localhost starter config
 # TAG_FASTMCP_APPS_CONFIG_PATH=apps.local.yaml
@@ -140,7 +144,7 @@ uv run tag-fastmcp
 
 Server runs at `http://127.0.0.1:8001`.
 
-When `TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml`, startup now auto-seeds the bundled SQLite maintenance and dispatch demo databases so the widget and admin console have sample data immediately.
+The bundled demo SQLite datasets are now opt-in. If you want them seeded on startup, set both `TAG_FASTMCP_APPS_CONFIG_PATH=apps.demo.yaml` and `TAG_FASTMCP_ENABLE_DEMO_SEED=true`.
 
 For your own localhost databases, edit [`apps.local.yaml`](/home/user/Desktop/FastMCP/apps.local.yaml) and set `TAG_FASTMCP_APPS_CONFIG_PATH=apps.local.yaml` in `.env`.
 
@@ -150,6 +154,10 @@ Available HTTP surfaces:
 - App picker bootstrap: `GET http://127.0.0.1:8001/apps`
 - Widget session bootstrap: `POST http://127.0.0.1:8001/session/start`
 - Widget chat stream: `POST http://127.0.0.1:8001/chat?stream=false`
+- Health probe: `GET http://127.0.0.1:8001/healthz`
+
+Platform-only HTTP surfaces when `TAG_FASTMCP_RUNTIME_PROFILE=platform`:
+
 - Admin chat stream: `POST http://127.0.0.1:8001/admin/chat?stream=false`
 - Admin approval queue: `GET http://127.0.0.1:8001/admin/approvals`
 - Admin approval decision: `POST http://127.0.0.1:8001/admin/approvals/{approval_id}/decision`
@@ -158,9 +166,8 @@ Available HTTP surfaces:
 - Admin proposal register: `POST http://127.0.0.1:8001/admin/agents/proposals/{proposal_id}/register`
 - Admin registration list: `GET http://127.0.0.1:8001/admin/agents/registrations`
 - Admin registration activate: `POST http://127.0.0.1:8001/admin/agents/registrations/{registration_id}/activate`
-- Health probe: `GET http://127.0.0.1:8001/healthz`
 
-Admin HTTP routes now accept `Authorization: Bearer <jwt>` and map trusted claims into the existing admin request-context and policy-enforcement path. In `development`, the live console can still fall back to the base64-encoded `x-admin-context` header for local walkthroughs; production should use bearer JWT auth. Admin chat now runs through the live bounded `admin_orchestration` runtime, while heavy cross-db execution and full IdP or JWKS integration are still later steps.
+When the platform profile is enabled, admin HTTP routes accept `Authorization: Bearer <jwt>` and map trusted claims into the existing admin request-context and policy-enforcement path. In `development`, the live console can still fall back to the base64-encoded `x-admin-context` header for local walkthroughs; production should use bearer JWT auth.
 
 ### 2. Architecture Console (UI)
 
@@ -192,9 +199,11 @@ This script reads the configured app schema, collects safe sample rows from the 
 
 | Variable | Description | Default |
 |---|---|---|
+| `TAG_FASTMCP_RUNTIME_PROFILE` | `simple` for the main DB-chatbot runtime, `platform` to re-enable the deferred admin, lifecycle, builder, and external-routing surfaces | `simple` |
 | `TAG_FASTMCP_DATABASE_URL` | Async runtime DB connection string | `sqlite+aiosqlite:///data/tag_fastmcp.sqlite3` |
 | `TAG_FASTMCP_CONTROL_PLANE_DATABASE_URL` | Async DB for approvals, proposal drafts, registrations, and lifecycle audit records; defaults to `TAG_FASTMCP_DATABASE_URL` when unset | unset |
 | `TAG_FASTMCP_APPS_CONFIG_PATH` | Path to the multi-app registry YAML | `apps.yaml` |
+| `TAG_FASTMCP_ENABLE_DEMO_SEED` | Explicitly seed the bundled demo SQLite apps on startup | `false` |
 | `TAG_FASTMCP_DEFAULT_CHAT_APP_ID` | Default app for widget chat when no `x-app-id` is supplied | unset |
 | `TAG_FASTMCP_ADMIN_AUTH_MODE` | `auto`, `jwt`, or `dev_header` for admin HTTP auth; `auto` uses `dev_header` in development and `jwt` otherwise | `auto` |
 | `TAG_FASTMCP_ADMIN_AUTH_JWT_SECRET` | Shared secret for admin bearer JWT verification | unset |

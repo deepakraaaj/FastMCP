@@ -233,6 +233,15 @@ class IntentAnalysis(BaseModel):
     ] = "answer"
 
 
+class ChatExecutionPlan(BaseModel):
+    intent: Literal["manual_answer", "read_query", "insert", "update", "clarify", "reject"]
+    answer: str | None = None
+    clarification_question: str | None = None
+    proposed_sql: str | None = None
+    confirmation_message: str | None = None
+    assumptions: list[str] = Field(default_factory=list)
+
+
 class CapabilityCandidate(BaseModel):
     capability_id: str
     app_id: str | None = None

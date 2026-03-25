@@ -206,7 +206,46 @@ class PolicyEnvelopeService:
         return sorted(capabilities.values(), key=lambda item: item.capability_id)
 
     @staticmethod
-    def _platform_allowlist(execution_mode: str, *, allow_platform_tools: bool) -> set[str]:
+    def _simple_platform_allowlist(execution_mode: str, *, allow_platform_tools: bool) -> set[str]:
+        if execution_mode == "system":
+            return {
+                "tool.health_check",
+                "tool.start_session",
+                "tool.describe_domain",
+                "tool.describe_capabilities",
+            }
+        if execution_mode == "app_chat":
+            return {
+                "tool.agent_chat",
+                "tool.execute_sql",
+                "tool.summarize_last_query",
+                "tool.run_report",
+                "tool.start_workflow",
+                "tool.continue_workflow",
+            }
+        if execution_mode == "direct_tool" and allow_platform_tools:
+            return {
+                "tool.health_check",
+                "tool.start_session",
+                "tool.describe_domain",
+                "tool.describe_capabilities",
+                "tool.generate_understanding_doc",
+                "tool.execute_sql",
+                "tool.summarize_last_query",
+                "tool.run_report",
+                "tool.start_workflow",
+                "tool.continue_workflow",
+                "tool.discover_schema",
+                "tool.agent_chat",
+            }
+        return set()
+
+    def _platform_allowlist(self, execution_mode: str, *, allow_platform_tools: bool) -> set[str]:
+        if not self.settings.enable_platform_features:
+            return self._simple_platform_allowlist(
+                execution_mode,
+                allow_platform_tools=allow_platform_tools,
+            )
         if execution_mode == "system":
             return {
                 "tool.health_check",

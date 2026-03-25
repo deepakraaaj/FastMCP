@@ -2,6 +2,8 @@
 
 Date: 2026-03-19
 
+The default shipped runtime is now the `simple` profile. In that profile, the application exposes the app-scoped chatbot, schema understanding, onboarding capture, and guarded DB execution paths. The chat fallback path can produce bounded SQL for safe reads and can stage writes behind an explicit confirmation turn. The admin, lifecycle, builder, and external-routing architecture described later in this document remains deferred behind the `platform` profile, and simple-mode startup should not construct those deferred services.
+
 ## System Architecture
 
 ```mermaid

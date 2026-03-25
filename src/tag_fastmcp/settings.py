@@ -20,6 +20,7 @@ class AppSettings(BaseSettings):
     )
 
     environment: str = "development"
+    runtime_profile: Literal["simple", "platform"] = "simple"
     app_name: str = "TAG FastMCP"
     app_version: str = "0.1.0"
     host: str = "127.0.0.1"
@@ -46,6 +47,7 @@ class AppSettings(BaseSettings):
     control_plane_database_url: str | None = None
     apps_config_path: Path = PROJECT_ROOT / "apps.yaml"
     default_chat_app_id: str | None = None
+    enable_demo_seed: bool = False
     admin_auth_mode: Literal["auto", "jwt", "dev_header"] = "auto"
     admin_auth_jwt_secret: str | None = None
     admin_auth_jwt_public_key: str | None = None
@@ -68,6 +70,10 @@ class AppSettings(BaseSettings):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    @property
+    def enable_platform_features(self) -> bool:
+        return self.runtime_profile == "platform"
 
 
 @lru_cache(maxsize=1)

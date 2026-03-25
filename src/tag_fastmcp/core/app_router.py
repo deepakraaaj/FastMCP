@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from tag_fastmcp.builder.service import BuilderRuntimeBridge
 from tag_fastmcp.core.domain_registry import DomainRegistry
 from tag_fastmcp.core.query_engine import AsyncQueryEngine
 from tag_fastmcp.core.schema_discovery import SchemaDiscovery
@@ -15,6 +14,7 @@ from tag_fastmcp.core.workflow_engine import WorkflowEngine
 from tag_fastmcp.models.app_config import AppsRegistry
 
 if TYPE_CHECKING:
+    from tag_fastmcp.builder.service import BuilderRuntimeBridge
     from tag_fastmcp.settings import AppSettings
 
 
@@ -71,11 +71,15 @@ class AppRouter:
                 session_store=self.session_store,
                 domain_registry=domain_registry
             )
-            builder_runtime = BuilderRuntimeBridge(
-                app_id=app_id,
-                domain_registry=domain_registry,
-                sql_policy=sql_policy
-            )
+            builder_runtime = None
+            if self.settings.enable_platform_features:
+                from tag_fastmcp.builder.service import BuilderRuntimeBridge
+
+                builder_runtime = BuilderRuntimeBridge(
+                    app_id=app_id,
+                    domain_registry=domain_registry,
+                    sql_policy=sql_policy,
+                )
             self._contexts[app_id] = AppContext(
                 app_id=app_id,
                 display_name=config.display_name,
@@ -99,7 +103,7 @@ class AppContext:
         query_engine: AsyncQueryEngine,
         schema_discovery: SchemaDiscovery,
         workflow_engine: WorkflowEngine,
-        builder_runtime: BuilderRuntimeBridge,
+        builder_runtime: BuilderRuntimeBridge | None,
     ):
         self.app_id = app_id
         self.display_name = display_name

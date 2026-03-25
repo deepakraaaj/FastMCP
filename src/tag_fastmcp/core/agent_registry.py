@@ -97,6 +97,12 @@ AGENT_SPECS: tuple[_AgentSpec, ...] = (
 )
 
 
+SIMPLE_RUNTIME_AGENT_KINDS = {
+    "app_scoped_chat",
+    "schema_intelligence",
+}
+
+
 @dataclass
 class AgentRegistry:
     settings: AppSettings
@@ -104,13 +110,18 @@ class AgentRegistry:
     _dynamic_agents: dict[str, AgentDefinition] = field(default_factory=dict)
 
     def catalog(self) -> list[RegistryAgentPayload]:
-        payloads = [self._to_registry_payload(spec) for spec in AGENT_SPECS]
+        payloads = [
+            self._to_registry_payload(spec)
+            for spec in AGENT_SPECS
+            if self._spec_allowed_by_profile(spec)
+        ]
         payloads.extend(
             RegistryAgentPayload(
                 **definition.model_dump(),
                 available=definition.runtime_state == "active",
             )
             for definition in self._dynamic_agents.values()
+            if self._definition_allowed_by_profile(definition)
         )
         return sorted(payloads, key=lambda item: item.agent_id)
 
@@ -122,11 +133,15 @@ class AgentRegistry:
         available: list[AgentDefinition] = []
 
         for spec in AGENT_SPECS:
+            if not self._spec_allowed_by_profile(spec):
+                continue
             definition = self._to_definition(spec)
             if self._definition_allowed(definition, request_context, policy_envelope):
                 available.append(definition)
 
         for definition in self._dynamic_agents.values():
+            if not self._definition_allowed_by_profile(definition):
+                continue
             if self._definition_allowed(definition, request_context, policy_envelope):
                 available.append(definition)
 
@@ -320,3 +335,13 @@ class AgentRegistry:
     @staticmethod
     def _runtime_priority(runtime_state: str) -> int:
         return {"active": 0, "stub": 1, "gated": 2}.get(runtime_state, 3)
+
+    def _spec_allowed_by_profile(self, spec: _AgentSpec) -> bool:
+        if self.settings.enable_platform_features:
+            return True
+        return spec.agent_kind in SIMPLE_RUNTIME_AGENT_KINDS
+
+    def _definition_allowed_by_profile(self, definition: AgentDefinition) -> bool:
+        if self.settings.enable_platform_features:
+            return True
+        return definition.agent_kind in SIMPLE_RUNTIME_AGENT_KINDS

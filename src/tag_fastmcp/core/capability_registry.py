@@ -244,6 +244,22 @@ BUILT_IN_TOOL_CAPABILITIES: tuple[_ToolCapabilitySpec, ...] = (
 )
 
 
+SIMPLE_RUNTIME_TOOL_NAMES = {
+    "health_check",
+    "start_session",
+    "describe_domain",
+    "describe_capabilities",
+    "execute_sql",
+    "summarize_last_query",
+    "run_report",
+    "start_workflow",
+    "continue_workflow",
+    "discover_schema",
+    "generate_understanding_doc",
+    "agent_chat",
+}
+
+
 class CapabilityRegistry:
     def __init__(
         self,
@@ -257,7 +273,7 @@ class CapabilityRegistry:
 
     def describe(self, app_id: str | None = None) -> RegistryPayload:
         selected_apps = self._selected_apps(app_id)
-        built_in_capabilities = [self._tool_capability(spec) for spec in BUILT_IN_TOOL_CAPABILITIES]
+        built_in_capabilities = [self._tool_capability(spec) for spec in self._built_in_tool_specs()]
         capabilities = list(built_in_capabilities)
         apps: list[RegistryAppPayload] = []
         channels: list[RegistryChannelPayload] = []
@@ -319,6 +335,15 @@ class CapabilityRegistry:
             return [(app_id, self.apps_registry.apps[app_id])]
         except KeyError as exc:
             raise KeyError(f"Unknown application ID: {app_id}") from exc
+
+    def _built_in_tool_specs(self) -> list[_ToolCapabilitySpec]:
+        if self.settings.enable_platform_features:
+            return list(BUILT_IN_TOOL_CAPABILITIES)
+        return [
+            spec
+            for spec in BUILT_IN_TOOL_CAPABILITIES
+            if spec.tool_name in SIMPLE_RUNTIME_TOOL_NAMES
+        ]
 
     def _domain_registry(self, app_id: str, config: AppConfig) -> DomainRegistry:
         return DomainRegistry.from_app_config(
@@ -414,6 +439,9 @@ class CapabilityRegistry:
         return capabilities
 
     def _external_mcp_servers(self, app_id: str | None) -> tuple[list[RegistryServerPayload], list[CapabilityPayload]]:
+        if not self.settings.enable_platform_features:
+            return [], []
+
         servers: list[RegistryServerPayload] = []
         capabilities: list[CapabilityPayload] = []
 

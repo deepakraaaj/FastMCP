@@ -44,6 +44,7 @@ channels:
     return AppSettings(
         apps_config_path=apps_yaml,
         database_url=f"sqlite+aiosqlite:///{maintenance_db}",
+        runtime_profile="platform",
         stateless_http=True,
         root_path=tmp_path,
     )

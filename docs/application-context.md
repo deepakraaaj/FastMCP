@@ -3,6 +3,8 @@
 Date: 2026-03-19
 Purpose: Canonical fast-start context for this repository.
 
+The default runtime profile is now `simple`. That means the main shipped surface is app-scoped chat plus schema understanding and guarded DB execution. In that default path, fallback chat can now execute safe app-scoped reads and stage writes behind explicit confirmation. Older admin, lifecycle, builder, and external-routing paths are deferred behind the explicit `platform` profile, and the simple startup path no longer needs to construct those platform services.
+
 ## What This Project Is
 
 This project is a FastMCP-first rebuild of the TAG assistant runtime.

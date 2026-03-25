@@ -62,7 +62,9 @@ class SQLPolicyValidator:
             if type(node) in self.forbidden_commands:
                 return PolicyDecision(allowed=False, reason=f"Forbidden SQL command detected: {type(node).__name__}")
 
-        allow_mutations = self.allow_mutations if allow_mutations_override is None else bool(allow_mutations_override)
+        allow_mutations = self.allow_mutations
+        if allow_mutations_override is not None:
+            allow_mutations = allow_mutations and bool(allow_mutations_override)
         if isinstance(parsed, (exp.Insert, exp.Update)) and not allow_mutations:
             return PolicyDecision(allowed=False, reason="Mutations are disabled by policy.")
 

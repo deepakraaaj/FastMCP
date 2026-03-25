@@ -174,6 +174,21 @@ class FormatterService:
                     )
                 )
 
+        if formatter_input.route == "routing" and primary_mode != "text":
+            sql_result = payload.get("sql_result")
+            if isinstance(sql_result, dict):
+                blocks.append(
+                    OutputBlock(
+                        block_id=uuid.uuid4().hex,
+                        kind="table",
+                        title="Query Result",
+                        data={
+                            "row_count": sql_result.get("row_count"),
+                            "rows_preview": sql_result.get("rows_preview") or [],
+                        },
+                    )
+                )
+
         if formatter_input.route == "workflow":
             workflow = payload.get("workflow") or payload.get("output", {}).get("workflow")
             if isinstance(workflow, dict):
@@ -350,6 +365,11 @@ class FormatterService:
     def _sql_text(payload: dict[str, Any]) -> str | None:
         if "query" in payload:
             return str(payload["query"])
+        if "proposed_sql" in payload:
+            return str(payload["proposed_sql"])
+        sql_result = payload.get("sql_result")
+        if isinstance(sql_result, dict) and sql_result.get("query"):
+            return str(sql_result["query"])
         report = payload.get("report") or payload.get("output", {}).get("report")
         if isinstance(report, dict) and report.get("query"):
             return str(report["query"])

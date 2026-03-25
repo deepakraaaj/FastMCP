@@ -4,6 +4,8 @@ Date: 2026-03-19
 
 This file is for the next AI or engineer who takes over.
 
+The repo now defaults to the `simple` runtime profile. Treat app-scoped chat, schema understanding, onboarding capture, workflows, and guarded DB execution as the active product path. The chat fallback path now supports safe generated reads plus staged write confirmation. The older admin, lifecycle, builder, and external-routing surfaces are still present only as deferred `platform` features, and simple-mode startup should avoid constructing those platform services at all.
+
 ## Strategic Direction
 
 Do not turn FastMCP into the whole platform.
@@ -31,6 +33,7 @@ Use these long-term ownership boundaries:
 - session store with memory and Valkey backends
 - idempotency store with memory and Valkey backends
 - SQL policy validator
+- fallback chat planner for safe generated reads plus confirmation-gated writes
 - SQLite-backed query engine
 - report execution from configured domain contracts
 - workflow start/continue skeleton
@@ -38,7 +41,7 @@ Use these long-term ownership boundaries:
 - development domain contract examples
 - localhost demo path via `apps.local.yaml` plus `domains/remp_local.yaml` for a real MySQL-backed management walkthrough
 - compatibility HTTP adapter for the existing chatbot widget with `/session/start` and `/chat` mounted alongside `/mcp`
-- optional `apps.demo.yaml` bootstrap with auto-seeded SQLite maintenance and dispatch demo datasets for local console walkthroughs
+- optional `apps.demo.yaml` bootstrap with explicit `TAG_FASTMCP_ENABLE_DEMO_SEED=true` when you want the bundled SQLite maintenance and dispatch demo datasets seeded for local walkthroughs
 - core chat service for widget session history, planner entry, and clarification-agent fallback
 - core admin chat service for trusted admin context, planner entry, live admin orchestration runtime, approval/proposal pause points, and formatter output
 - admin HTTP bearer JWT auth baseline with trusted claim-to-context mapping and development header fallback

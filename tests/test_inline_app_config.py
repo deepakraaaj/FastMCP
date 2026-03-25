@@ -61,6 +61,7 @@ channels:
     return AppSettings(
         apps_config_path=apps_yaml,
         database_url=f"sqlite+aiosqlite:///{db_path}",
+        runtime_profile="platform",
         stateless_http=True,
         root_path=tmp_path,
     )
@@ -172,6 +173,7 @@ apps:
     settings = AppSettings(
         apps_config_path=apps_yaml,
         database_url=f"sqlite+aiosqlite:///{db_path}",
+        runtime_profile="platform",
         stateless_http=True,
         root_path=tmp_path,
     )
